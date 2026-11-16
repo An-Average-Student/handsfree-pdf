@@ -37,7 +37,7 @@ export const OPTIONS = {
   },
 };
 
-export const DEFAULT_SETTINGS = { scroll: 'palm-move', page: 'palm-swipe', zoom: 'pinch-move', sensitivity: 1, scrollSpeed: 1.5, pointer: 'point', pointerGain: 1.6, feedback: true, cameraId: '' };
+export const DEFAULT_SETTINGS = { scroll: 'palm-move', page: 'palm-swipe', zoom: 'pinch-move', sensitivity: 1, scrollSpeed: 1.5, pointer: 'point', pointerGain: 1.6, feedback: true, cameraId: '', previewMini: false };
 
 const KEY = 'handsfree-pdf-settings-v1';
 
@@ -59,6 +59,7 @@ export function loadSettings() {
       if (typeof saved.pointerGain === 'number' && saved.pointerGain >= 1 && saved.pointerGain <= 3) {
         s.pointerGain = saved.pointerGain;
       }
+      if (typeof saved.previewMini === 'boolean') s.previewMini = saved.previewMini;
       if (typeof saved.feedback === 'boolean') s.feedback = saved.feedback;
       if (typeof saved.cameraId === 'string' && saved.cameraId.length <= 256) s.cameraId = saved.cameraId;
     }

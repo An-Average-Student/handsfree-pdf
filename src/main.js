@@ -13,7 +13,7 @@ const zoomLabel = document.getElementById('zoom-label');
 const pageLabel = document.getElementById('page-label');
 
 const BASE_SCALE = 1.3; // zoom 1 (= "100%") draws a page at 1.3x its natural PDF size
-const MIN_ZOOM = 0.3;
+const MIN_ZOOM = 0.1; // low enough to fit a wide page on a phone screen
 const MAX_ZOOM = 4;
 
 let pdf = null;     // set when a PDF is open
@@ -59,6 +59,7 @@ async function loadFile(file) {
   try {
     await (kind === 'pdf' ? loadPdf(file) : loadDom(kind, file));
     emptyEl.hidden = true;
+    document.body.classList.add('has-doc');
     viewer.scrollTop = 0;
     fitMode = 'width'; // a sensible starting size for every new file
     await applyFit();
@@ -124,7 +125,14 @@ async function renderAll() {
     return;
   }
   restorePosition(pos);
+  updateFitButtons();
   updateLabels();
+}
+
+// Highlight which fit mode is active (neither, after a manual zoom).
+function updateFitButtons() {
+  document.getElementById('fit-width').setAttribute('aria-pressed', String(fitMode === 'width'));
+  document.getElementById('fit-page').setAttribute('aria-pressed', String(fitMode === 'page'));
 }
 
 function updateLabels() {
@@ -155,18 +163,21 @@ export const actions = {
   },
 };
 
+// Respect the "reduce motion" accessibility setting.
+const smoothScroll = () => (matchMedia('(prefers-reduced-motion: reduce)').matches ? 'auto' : 'smooth');
+
 function goToPage(n) {
   const count = pageCount();
   if (!count) return;
   const target = pagesEl.querySelector(`[data-page="${Math.min(count, Math.max(1, n))}"]`);
-  target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  target?.scrollIntoView({ behavior: smoothScroll(), block: 'start' });
 }
 
 // Next / previous page. A Word file with no page breaks comes out as ONE very tall
 // page, so in that case move by (nearly) a screenful instead.
 function step(dir) {
   if (domDoc && domDoc.count === 1) {
-    viewer.scrollBy({ top: dir * viewer.clientHeight * 0.9, behavior: 'smooth' });
+    viewer.scrollBy({ top: dir * viewer.clientHeight * 0.9, behavior: smoothScroll() });
   } else {
     goToPage(currentPage() + dir);
   }
@@ -278,6 +289,10 @@ initSettingsUI({ settings, onChange: () => saveSettings(settings) });
 
 const camBtn = document.getElementById('camera-toggle');
 const camStatus = document.getElementById('camera-status');
+function setCameraButton(on) {
+  camBtn.setAttribute('aria-pressed', String(on));
+  camBtn.title = on ? 'Stop the camera (C)' : 'Start the camera (C)';
+}
 const camBox = document.getElementById('cam');
 let stopTracking = null;
 
@@ -357,7 +372,7 @@ function stopCamera() {
   stopTracking?.();
   stopTracking = null;
   camBox.classList.remove('on');
-  camBtn.textContent = 'Start camera';
+  setCameraButton(false);
   camStatus.textContent = '';
   camSelect.hidden = true;
   movePointer(null);
@@ -371,18 +386,22 @@ async function startCamera() {
       video: document.getElementById('cam-video'),
       overlay: document.getElementById('cam-overlay'),
       deviceId: settings.cameraId,
-      onStatus: (s) => (camStatus.textContent = s),
+      onStatus: (s) => {
+        camStatus.textContent = s;
+        if (s === 'Camera on') setTimeout(() => { if (camStatus.textContent === 'Camera on') camStatus.textContent = ''; }, 1500);
+      },
       onFrame: (hand) => controller.update(hand),
     });
     stopTracking = tracking.stop;
     settings.cameraId = tracking.deviceId; // remember which camera worked
     saveSettings(settings);
-    camBtn.textContent = 'Stop camera';
+    setCameraButton(true);
     await fillCameraList(tracking.deviceId);
   } catch (err) {
     console.error(err);
     camBox.classList.remove('on');
-    camStatus.textContent = friendlyCameraError(err);
+    camStatus.textContent = '';
+    showToast(friendlyCameraError(err), 7000); // the camera card is hidden, so tell the user in a toast
   } finally {
     camBtn.disabled = false;
   }
@@ -401,4 +420,45 @@ camSelect.onchange = async () => {
 // A camera was plugged in or removed.
 navigator.mediaDevices?.addEventListener?.('devicechange', () => {
   if (stopTracking) fillCameraList(settings.cameraId);
+});
+
+// ---- Welcome screen, demo, camera card, panel close ---------------------------
+const fileInput = document.getElementById('file-input');
+document.getElementById('hero-open').onclick = () => fileInput.click();
+
+async function loadDemo() {
+  try {
+    const res = await fetch(`${import.meta.env.BASE_URL}demo.pdf`);
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    await loadFile(new File([await res.blob()], 'demo.pdf', { type: 'application/pdf' }));
+  } catch (err) {
+    console.error(err);
+    showToast('Couldn\u2019t load the demo.', 4000);
+  }
+}
+document.getElementById('demo-btn').onclick = loadDemo;
+
+// Collapse the camera picture (it can sit on your slide); hand tracking keeps running.
+const camMin = document.getElementById('cam-min');
+function setPreviewMini(mini) {
+  camBox.classList.toggle('mini', mini);
+  camMin.setAttribute('aria-expanded', String(!mini));
+  camMin.title = mini ? 'Show the camera picture' : 'Hide the picture (tracking keeps running)';
+  camMin.setAttribute('aria-label', camMin.title);
+}
+setPreviewMini(settings.previewMini);
+camMin.onclick = () => {
+  settings.previewMini = !camBox.classList.contains('mini');
+  setPreviewMini(settings.previewMini);
+  saveSettings(settings);
+};
+
+document.getElementById('settings-x').onclick = () => document.getElementById('settings').close();
+window.addEventListener('keydown', (e) => {
+  if (e.key.toLowerCase() === 'o' && !e.ctrlKey && !e.metaKey && !e.altKey && !e.repeat
+    && !(e.target instanceof HTMLElement && e.target.matches('input, select, textarea'))
+    && !document.getElementById('settings').open) {
+    e.preventDefault();
+    fileInput.click();
+  }
 });
