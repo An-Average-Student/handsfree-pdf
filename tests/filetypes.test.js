@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { fileKind, unsupportedMessage } from '../src/filetypes.js';
+import { fileKind, unsupportedMessage, tooLarge, MAX_BYTES } from '../src/filetypes.js';
 
 test('detects supported types by extension, any letter case', () => {
   assert.equal(fileKind({ name: 'deck.pptx' }), 'pptx');
@@ -24,4 +24,10 @@ test('unknown files return null', () => {
   assert.equal(fileKind({ name: 'noextension' }), null);
   assert.equal(fileKind(null), null);
   assert.match(unsupportedMessage(null), /PDF/);
+});
+
+test('very large files are refused, normal ones are not', () => {
+  assert.equal(tooLarge({ size: MAX_BYTES + 1 }), true);
+  assert.equal(tooLarge({ size: 5 * 1024 * 1024 }), false);
+  assert.equal(tooLarge({}), false);
 });

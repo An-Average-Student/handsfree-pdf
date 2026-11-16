@@ -36,3 +36,8 @@ export function unsupportedMessage(kind) {
     ? 'Old .doc / .ppt files can’t be opened. Save as .docx / .pptx or PDF first.'
     : `That file type isn’t supported. Open a ${SUPPORTED_TEXT} file.`;
 }
+
+/** Largest file we will try to open. Bigger files are refused rather than freezing the tab. */
+export const MAX_BYTES = 150 * 1024 * 1024;
+export const tooLarge = (file) => (file?.size ?? 0) > MAX_BYTES;
+export const TOO_LARGE_TEXT = `That file is too large (limit ${MAX_BYTES / 1024 / 1024} MB).`;

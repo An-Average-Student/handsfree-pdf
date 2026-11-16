@@ -1,7 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 // "?url" tells Vite to give us the file's address instead of running it.
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
-import { fileKind, unsupportedMessage, ACCEPT } from './filetypes.js';
+import { fileKind, unsupportedMessage, ACCEPT, tooLarge, TOO_LARGE_TEXT } from './filetypes.js';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -27,7 +27,8 @@ const pageEls = () => pagesEl.querySelectorAll('[data-page]');
 
 async function loadPdf(file) {
   const data = new Uint8Array(await file.arrayBuffer());
-  const doc = await pdfjsLib.getDocument({ data }).promise;
+  // No eval, no XFA forms: we only want to *show* pages, never run anything from the file.
+  const doc = await pdfjsLib.getDocument({ data, isEvalSupported: false, enableXfa: false }).promise;
   pdf = doc; domDoc = null;
   pagesEl.style.zoom = '';
 }
@@ -49,6 +50,7 @@ async function loadFile(file) {
     showToast(unsupportedMessage(kind), 4500);
     return;
   }
+  if (tooLarge(file)) { showToast(TOO_LARGE_TEXT, 5000); return; }
   showToast(`Opening ${file.name}\u2026`, 60000);
   try {
     await (kind === 'pdf' ? loadPdf(file) : loadDom(kind, file));

@@ -60,7 +60,7 @@ export function loadSettings() {
         s.pointerGain = saved.pointerGain;
       }
       if (typeof saved.feedback === 'boolean') s.feedback = saved.feedback;
-      if (typeof saved.cameraId === 'string') s.cameraId = saved.cameraId;
+      if (typeof saved.cameraId === 'string' && saved.cameraId.length <= 256) s.cameraId = saved.cameraId;
     }
   } catch { /* private mode or corrupt data: just use defaults */ }
   return s;

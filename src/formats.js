@@ -6,6 +6,43 @@
 //   { holder, pages }   holder = element to show, pages = one element per page / slide
 // If anything fails the visible viewer is left untouched.
 
+// ---- Safety: documents come from anywhere, so treat what they render as untrusted ------
+const BLOCKED_TAGS = 'script, iframe, frame, frameset, object, embed, applet, link, meta, base, form, foreignObject, audio, video, source, track, portal';
+const SAFE_LINK = /^(https?:|mailto:|tel:|#)/i;
+const REMOTE_URL = /^\s*(https?:)?\/\//i;
+
+/**
+ * Removes anything executable or "phone-home" from rendered document content:
+ * scripts, frames, embeds, inline event handlers, javascript: links and remote images.
+ * (The Content-Security-Policy is the second layer; this keeps the page itself clean.)
+ */
+export function sanitize(root) {
+  root.querySelectorAll(BLOCKED_TAGS).forEach((n) => n.remove());
+  for (const el of root.querySelectorAll('*')) {
+    for (const attr of [...el.attributes]) {
+      const name = attr.name.toLowerCase();
+      if (name.startsWith('on') || name === 'srcdoc' || name === 'formaction') el.removeAttribute(attr.name);
+    }
+    if (el.matches('a, area')) {
+      for (const name of ['href', 'xlink:href']) {
+        const v = el.getAttribute(name);
+        if (v === null) continue;
+        if (!SAFE_LINK.test(v.trim())) el.removeAttribute(name);
+      }
+      if (el.hasAttribute('href') && !el.getAttribute('href').startsWith('#')) {
+        el.setAttribute('target', '_blank');
+        el.setAttribute('rel', 'noopener noreferrer nofollow');
+      }
+    }
+    for (const name of ['src', 'srcset', 'poster', 'background', 'xlink:href', 'href']) {
+      if (el.matches('a, area')) continue;
+      const v = el.getAttribute(name);
+      if (v !== null && (REMOTE_URL.test(v) || /^\s*javascript:/i.test(v))) el.removeAttribute(name);
+    }
+  }
+  return root;
+}
+
 function makeStage() {
   const stage = document.createElement('div');
   // Off-screen but still laid out, so the libraries can measure things.
@@ -30,7 +67,7 @@ export async function renderDocx(file) {
     });
     const pages = [...holder.querySelectorAll('section.docx')];
     if (!pages.length) throw new Error('No pages found in that Word document.');
-    return { holder, pages };
+    return { holder: sanitize(holder), pages };
   } finally {
     stage.remove(); // `holder` stays intact; the caller moves it into the viewer
   }
@@ -64,7 +101,7 @@ export async function renderPptx(file) {
     await previewer.preview(buffer);
     const pages = [...holder.querySelectorAll('.pptx-preview-slide-wrapper')];
     if (!pages.length) throw new Error('No slides found in that PowerPoint file.');
-    return { holder, pages };
+    return { holder: sanitize(holder), pages };
   } finally {
     stage.remove();
   }
