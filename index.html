@@ -15,6 +15,7 @@
       </label>
       <button id="camera-toggle">Start camera</button>
       <button id="settings-open">⚙ Gestures</button>
+      <button id="present" title="Fullscreen presentation (F)">⛶ Present</button>
       <span id="camera-status"></span>
       <span class="spacer"></span>
       <button id="fit-width" title="Fit page width to the screen">Fit width</button>
@@ -35,6 +36,8 @@
       <canvas id="cam-overlay"></canvas>
       <div id="cam-hud">OFF · show ✌️ for 1 second to start</div>
     </div>
+
+    <div id="toast" role="status" aria-live="polite"></div>
 
     <dialog id="settings">
       <header><strong>Choose your gestures</strong></header>

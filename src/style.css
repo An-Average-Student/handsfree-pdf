@@ -46,3 +46,13 @@ legend { padding: 0 6px; opacity: .8; }
 .choice input { margin-top: 4px; }
 .choice small, fieldset small { opacity: .65; }
 #cheatsheet ul { margin: 4px 0; padding-left: 18px; line-height: 1.6; }
+
+/* Presentation mode: just the PDF */
+body.presenting #toolbar { display: none; }
+body.presenting #viewer { padding: 16px; }
+
+/* Small floating message */
+#toast { position: fixed; left: 50%; bottom: 24px; transform: translate(-50%, 10px);
+  background: rgba(0,0,0,.8); color: #fff; padding: 8px 16px; border-radius: 20px;
+  font-size: 15px; opacity: 0; pointer-events: none; transition: opacity .2s, transform .2s; z-index: 10; }
+#toast.show { opacity: 1; transform: translate(-50%, 0); }

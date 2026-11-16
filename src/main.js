@@ -131,7 +131,11 @@ window.addEventListener('resize', () => {
 viewer.addEventListener('scroll', updateLabels);
 
 window.addEventListener('keydown', (e) => {
-  if (e.key === 'ArrowRight' || e.key === 'PageDown') actions.nextPage();
+  if (document.getElementById('settings').open) return; // don't act while the panel is open
+  if (e.key === 'f' || e.key === 'F') togglePresenting();
+  else if (e.key === 'c' || e.key === 'C') document.getElementById('camera-toggle').click();
+  else if (e.key === 'Escape' && isPresenting()) leavePresenting(); // fallback when fullscreen isn't available
+  else if (e.key === 'ArrowRight' || e.key === 'PageDown') actions.nextPage();
   else if (e.key === 'ArrowLeft' || e.key === 'PageUp') actions.prevPage();
   else if (e.key === 'ArrowDown') actions.scrollBy(120);
   else if (e.key === 'ArrowUp') actions.scrollBy(-120);
@@ -148,6 +152,45 @@ viewer.addEventListener('drop', (e) => {
   const f = e.dataTransfer.files[0];
   if (f && f.type === 'application/pdf') loadFile(f);
 });
+
+// ---- Small on-screen messages ----------------------------------------------
+const toastEl = document.getElementById('toast');
+let toastTimer;
+export function showToast(text, ms = 1600) {
+  toastEl.textContent = text;
+  toastEl.classList.add('show');
+  clearTimeout(toastTimer);
+  toastTimer = setTimeout(() => toastEl.classList.remove('show'), ms);
+}
+
+// ---- Presentation mode -----------------------------------------------------
+// Hides the toolbar, goes fullscreen and fits one page on screen.
+// If the browser refuses fullscreen (e.g. iPhone Safari) we still hide the toolbar.
+let fitBeforePresenting = null;
+
+function isPresenting() {
+  return document.body.classList.contains('presenting');
+}
+
+async function enterPresenting() {
+  fitBeforePresenting = fitMode;
+  document.body.classList.add('presenting');
+  try { await document.documentElement.requestFullscreen(); } catch { /* not supported: fine */ }
+  await fitTo('page');
+  showToast('Press Esc to exit', 2500);
+}
+
+async function leavePresenting() {
+  if (!isPresenting()) return;
+  document.body.classList.remove('presenting');
+  if (document.fullscreenElement) { try { await document.exitFullscreen(); } catch { /* ignore */ } }
+  if (fitBeforePresenting) await fitTo(fitBeforePresenting);
+}
+
+const togglePresenting = () => (isPresenting() ? leavePresenting() : enterPresenting());
+document.getElementById('present').onclick = togglePresenting;
+// The browser's own Esc handling exits fullscreen; keep our state in sync.
+document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) leavePresenting(); });
 
 // ---- Camera + hand tracking ------------------------------------------------
 import { startHandTracking } from './hands.js';
