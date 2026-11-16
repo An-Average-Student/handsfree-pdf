@@ -30,7 +30,7 @@ export const OPTIONS = {
   },
 };
 
-export const DEFAULT_SETTINGS = { scroll: 'palm-move', page: 'palm-swipe', zoom: 'pinch-move', sensitivity: 1 };
+export const DEFAULT_SETTINGS = { scroll: 'palm-move', page: 'palm-swipe', zoom: 'pinch-move', sensitivity: 1, feedback: true };
 
 const KEY = 'handsfree-pdf-settings-v1';
 
@@ -46,6 +46,7 @@ export function loadSettings() {
       if (typeof saved.sensitivity === 'number' && saved.sensitivity >= 0.5 && saved.sensitivity <= 2) {
         s.sensitivity = saved.sensitivity;
       }
+      if (typeof saved.feedback === 'boolean') s.feedback = saved.feedback;
     }
   } catch { /* private mode or corrupt data: just use defaults */ }
   return s;

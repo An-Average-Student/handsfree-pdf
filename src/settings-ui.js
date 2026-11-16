@@ -57,6 +57,21 @@ export function initSettingsUI({ settings, onChange }) {
     sens.append(slider, val, document.createElement('br'), note);
     body.append(sens);
 
+    // On-screen feedback switch
+    const fb = document.createElement('fieldset');
+    fb.innerHTML = '<legend>Feedback</legend>';
+    const fbRow = document.createElement('label');
+    fbRow.className = 'choice';
+    const fbInput = document.createElement('input');
+    fbInput.type = 'checkbox';
+    fbInput.checked = settings.feedback;
+    fbInput.onchange = () => { settings.feedback = fbInput.checked; onChange(); };
+    const fbText = document.createElement('span');
+    fbText.innerHTML = '<strong>Show a message on the slide when a gesture fires</strong><br><small>For example "➡ Page 2 / 10". Handy for you and your audience; turn it off for a clean slide.</small>';
+    fbRow.append(fbInput, fbText);
+    fb.append(fbRow);
+    body.append(fb);
+
     // Live cheat sheet
     const sheet = document.createElement('fieldset');
     sheet.id = 'cheatsheet';

@@ -212,10 +212,39 @@ const LABELS = {
   thumbup: '👍 thumb up', thumbdown: '👎 thumb down', lshape: '🤏 L-shape', point: '☝️ pointing',
   other: '… unrecognised', none: 'no hand seen',
 };
-const controller = createController({
-  actions,
+// The same actions, plus a short on-screen message so you (and the audience)
+// can see that a gesture was understood.
+let lastScrollToast = 0;
+const say = (text, ms) => { if (settings.feedback) showToast(text, ms); };
+export const feedbackActions = {
+  scrollBy: (dy) => {
+    actions.scrollBy(dy);
+    const now = performance.now();
+    if (now - lastScrollToast > 800) { say(dy > 0 ? '⬇ Scrolling' : '⬆ Scrolling', 900); lastScrollToast = now; }
+  },
+  nextPage: () => {
+    if (pdf) say(`➡ Page ${Math.min(pdf.numPages, currentPage() + 1)} / ${pdf.numPages}`);
+    actions.nextPage();
+  },
+  prevPage: () => {
+    if (pdf) say(`⬅ Page ${Math.max(1, currentPage() - 1)} / ${pdf.numPages}`);
+    actions.prevPage();
+  },
+  zoomBy: (factor) => {
+    actions.zoomBy(factor);
+    say(`🔍 Zoom ${Math.round(zoom * 100)}%`, 900);
+  },
+};
+
+let wasActive = false;
+export const controller = createController({
+  actions: feedbackActions,
   getSettings: () => settings,
   onState: ({ active, gesture, holdProgress }) => {
+    if (active !== wasActive) {
+      wasActive = active;
+      say(active ? '✋ Gestures ON' : '✊ Gestures OFF', 1400);
+    }
     const state = active ? 'ON' : 'OFF';
     const hold = holdProgress > 0 && holdProgress < 1 ? ` · hold ${Math.round(holdProgress * 100)}%` : '';
     hud.textContent = `${state} · ${LABELS[gesture]}${hold}`;
