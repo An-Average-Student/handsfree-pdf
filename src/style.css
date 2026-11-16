@@ -32,3 +32,17 @@ button:hover, .btn:hover { background: #4a4a52; }
 #cam-hud { position: absolute; left: 0; right: 0; bottom: 0; padding: 5px 8px;
   font-size: 12px; background: rgba(0,0,0,.65); color: #ddd; transform: none; height: auto; inset: auto 0 0 0; }
 #cam-hud.on { background: rgba(30,120,60,.85); color: #fff; }
+
+/* Settings panel */
+dialog#settings { background: #26262b; color: #eee; border: 1px solid #000; border-radius: 12px;
+  padding: 0; width: min(560px, 94vw); max-height: 88vh; }
+dialog#settings::backdrop { background: rgba(0,0,0,.6); }
+dialog#settings > header { padding: 14px 18px; border-bottom: 1px solid #000; font-size: 16px; }
+#settings-body { padding: 4px 18px; overflow: auto; max-height: calc(88vh - 120px); }
+dialog#settings footer { display: flex; justify-content: space-between; padding: 12px 18px; border-top: 1px solid #000; }
+fieldset { border: 1px solid #3d3d45; border-radius: 8px; margin: 12px 0; padding: 8px 12px; }
+legend { padding: 0 6px; opacity: .8; }
+.choice { display: flex; gap: 10px; align-items: flex-start; padding: 6px 0; cursor: pointer; }
+.choice input { margin-top: 4px; }
+.choice small, fieldset small { opacity: .65; }
+#cheatsheet ul { margin: 4px 0; padding-left: 18px; line-height: 1.6; }

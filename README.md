@@ -19,20 +19,24 @@ Open the printed URL, then drop a PDF onto the page.
 
 1. Click **Start camera** and allow access.
 2. Hold a **peace sign** (index + middle finger up) for 1 second to switch gesture control ON. Do it again to switch OFF.
-3. While ON:
+3. Open **⚙ Gestures** to choose which gesture does what. Your choices are saved in your browser.
 
-| Gesture | Action |
+| Action | Choices |
 |---|---|
-| Open palm, move up / down | Scroll |
-| Open palm, quick swipe left / right | Previous / next page |
-| Pinch (thumb + index), move up / down | Zoom in / out |
-| Fist | Rest (nothing happens) |
+| Scroll | Open palm up/down (default) · Thumbs up/down · Open palm "joystick" · Off |
+| Change page | Open palm swipe (default) · Index-finger swipe · Off |
+| Zoom | Pinch + move up/down (default) · L-shape spread/close · Off |
 
-The small bar under the camera preview shows what the app currently sees.
+✊ A fist is always the "rest" pose: nothing happens. The small bar under the camera
+preview shows what the app currently sees, which helps when a gesture isn't picked up.
 
 Keyboard fallback: arrow keys (pages / scroll) and `+` / `-` (zoom).
 
-Run the logic tests with `npm test`.
+## Adding a new gesture option
+
+1. Add an entry to `OPTIONS` in `src/settings.js`. It appears in the panel automatically.
+2. Add the behaviour for its `id` in `src/gestures.js` (and a pose in `classify()` if it needs one).
+3. Add a test in `tests/gestures.test.js` and run `npm test`.
 
 ## Built with
 

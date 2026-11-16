@@ -114,6 +114,11 @@ viewer.addEventListener('drop', (e) => {
 // ---- Camera + hand tracking ------------------------------------------------
 import { startHandTracking } from './hands.js';
 import { createController } from './gestures.js';
+import { loadSettings, saveSettings } from './settings.js';
+import { initSettingsUI } from './settings-ui.js';
+
+const settings = loadSettings();
+initSettingsUI({ settings, onChange: () => saveSettings(settings) });
 
 const camBtn = document.getElementById('camera-toggle');
 const camStatus = document.getElementById('camera-status');
@@ -121,9 +126,14 @@ const camBox = document.getElementById('cam');
 let stopTracking = null;
 
 const hud = document.getElementById('cam-hud');
-const LABELS = { open: '🖐 open palm', fist: '✊ fist (resting)', peace: '✌️ peace', pinch: '👌 pinch', other: '… unrecognised', none: 'no hand seen' };
+const LABELS = {
+  open: '🖐 open palm', fist: '✊ fist (resting)', peace: '✌️ peace', pinch: '👌 pinch',
+  thumbup: '👍 thumb up', thumbdown: '👎 thumb down', lshape: '🤏 L-shape', point: '☝️ pointing',
+  other: '… unrecognised', none: 'no hand seen',
+};
 const controller = createController({
   actions,
+  getSettings: () => settings,
   onState: ({ active, gesture, holdProgress }) => {
     const state = active ? 'ON' : 'OFF';
     const hold = holdProgress > 0 && holdProgress < 1 ? ` · hold ${Math.round(holdProgress * 100)}%` : '';
