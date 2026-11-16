@@ -31,6 +31,10 @@ Open the printed URL, then drop a PDF onto the page.
 | Change page | Open palm swipe (default) · Index-finger swipe · Off |
 | Zoom | Pinch + move up/down (default) · L-shape spread/close · Off |
 
+**Faster scrolling on long PDFs:** a quicker hand scrolls disproportionately further, holding 👍/👎 speeds up the longer you hold it, and **Scroll speed** in ⚙ Gestures scales it all (0.5× to 4×).
+
+**Zoom safety:** L-shape zoom only counts while your index finger is straight and the L has been held for a moment, and changes are discarded if you close your hand into a fist.
+
 ✊ A fist is always the "rest" pose: nothing happens. The small bar under the camera
 preview shows what the app currently sees, which helps when a gesture isn't picked up.
 

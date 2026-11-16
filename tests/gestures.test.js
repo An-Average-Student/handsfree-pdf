@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classify, createController } from '../src/gestures.js';
+import { classify, createController, indexStraightness } from '../src/gestures.js';
 import { DEFAULT_SETTINGS } from '../src/settings.js';
 
 // Build a fake hand (21 points) pointing up, with chosen fingers straight or curled.
@@ -80,7 +80,7 @@ test('fast sideways swipe changes page once', () => {
 test('pinch + hand up zooms in', () => {
   const { calls, c } = setup();
   let t = turnOn(c);
-  for (let i = 0; i < 6; i++, t += 33) c.update(open({ pinch: true, y: -i * 0.02 }), t);
+  for (let i = 0; i < 16; i++, t += 33) c.update(open({ pinch: true, y: -i * 0.02 }), t);
   const zooms = calls.filter((x) => x[0] === 'zoom');
   assert.ok(zooms.length > 0 && zooms.every((z) => z[1] > 1));
 });
@@ -120,17 +120,45 @@ test('joystick mode: palm lowered from start scrolls down, held still does nothi
 
 const lHand = (gap) => makeHand({ index: 1, thumbTip: { x: 0.45 - gap, y: 0.4 } });
 
-test('L-shape: opening thumb + index zooms in, closing zooms out', () => {
+const hold = (c, hand, frames, t) => { for (let i = 0; i < frames; i++, t += 33) c.update(hand, t); return t; };
+
+test('L-shape: opening thumb + index zooms in, closing zooms out (after being held)', () => {
   const { calls, c } = setup({ zoom: 'l-spread' });
   let t = turnOn(c);
-  for (let i = 0; i < 8; i++, t += 33) c.update(lHand(0.1 + i * 0.015), t);
+  t = hold(c, lHand(0.1), 10, t); // hold the L first: zoom must "arm"
+  assert.equal(calls.filter((x) => x[0] === 'zoom').length, 0);
+  for (let i = 1; i <= 10; i++, t += 33) c.update(lHand(0.1 + i * 0.01), t);
+  t = hold(c, lHand(0.2), 8, t); // keep the L so queued changes are applied
   let z = calls.filter((x) => x[0] === 'zoom');
-  assert.ok(z.length > 0 && z.every((x) => x[1] > 1));
-  for (let i = 0; i < 6; i++, t += 33) c.update(lHand(0.205), t); // hold still: smoothing settles
+  assert.ok(z.length > 0 && z.every((x) => x[1] > 1), JSON.stringify(z));
   calls.length = 0;
-  for (let i = 1; i <= 8; i++, t += 33) c.update(lHand(0.205 - i * 0.012), t);
+  for (let i = 1; i <= 10; i++, t += 33) c.update(lHand(0.2 - i * 0.01), t);
+  t = hold(c, lHand(0.1), 8, t);
   z = calls.filter((x) => x[0] === 'zoom');
   assert.ok(z.length > 0 && z.every((x) => x[1] < 1), JSON.stringify(z));
+});
+
+test('BUG FIX: closing an L into a fist does NOT zoom out', () => {
+  const { calls, c } = setup({ zoom: 'l-spread' });
+  let t = turnOn(c);
+  t = hold(c, lHand(0.2), 12, t); // a steady L
+  // the hand closes: thumb and index squeeze together for ~3 frames, then it is a fist
+  for (const gap of [0.17, 0.13, 0.09]) { c.update(lHand(gap), t); t += 33; }
+  t = hold(c, makeHand({}), 12, t); // fist
+  assert.equal(calls.filter((x) => x[0] === 'zoom').length, 0, JSON.stringify(calls));
+});
+
+test('a quick flash of an L (passing through while changing pose) does not zoom', () => {
+  const { calls, c } = setup({ zoom: 'l-spread' });
+  let t = turnOn(c);
+  for (let i = 0; i < 4; i++, t += 33) c.update(lHand(0.2 - i * 0.03), t); // < arm time
+  t = hold(c, makeHand({}), 10, t);
+  assert.equal(calls.filter((x) => x[0] === 'zoom').length, 0);
+});
+
+test('index straightness: straight finger is ~1, curled finger is low', () => {
+  assert.ok(indexStraightness(makeHand({ index: 1 })) > 0.95);
+  assert.ok(indexStraightness(makeHand({ index: 0 })) < 0.5);
 });
 
 test('point-swipe changes page with index finger, not with open palm', () => {
@@ -159,4 +187,33 @@ test('sensitivity scales scroll distance', () => {
     return calls.filter((x) => x[0] === 'scroll').reduce((n, x) => n + x[1], 0);
   };
   assert.ok(run(2) > run(1) * 1.8);
+});
+
+test('palm scroll speeds up when the hand moves faster (more than proportional)', () => {
+  const total = (step) => {
+    const { calls, c } = setup({ scrollSpeed: 1 });
+    let t = turnOn(c);
+    for (let i = 0; i < 8; i++, t += 33) c.update(open({ y: i * step }), t);
+    return calls.filter((x) => x[0] === 'scroll').reduce((n, x) => n + x[1], 0);
+  };
+  const slow = total(0.01), fast = total(0.04);
+  assert.ok(fast > slow * 4 * 1.2, `slow=${slow} fast=${fast}`); // 4x the movement gives well over 4x the scroll
+});
+
+test('scroll speed setting scales scrolling', () => {
+  const run = (scrollSpeed) => {
+    const { calls, c } = setup({ scrollSpeed });
+    let t = turnOn(c);
+    for (let i = 0; i < 8; i++, t += 33) c.update(open({ y: i * 0.02 }), t);
+    return calls.filter((x) => x[0] === 'scroll').reduce((n, x) => n + x[1], 0);
+  };
+  assert.ok(run(3) > run(1) * 2.5);
+});
+
+test('holding 👍 longer scrolls faster', () => {
+  const { calls, c } = setup({ scroll: 'thumbs', scrollSpeed: 1 });
+  let t = turnOn(c);
+  for (let i = 0; i < 60; i++, t += 33) c.update(makeHand({ thumb: 'up' }), t);
+  const s = calls.filter((x) => x[0] === 'scroll').map((x) => Math.abs(x[1]));
+  assert.ok(s[s.length - 1] > s[1] * 3, `first=${s[1]} last=${s[s.length - 1]}`);
 });

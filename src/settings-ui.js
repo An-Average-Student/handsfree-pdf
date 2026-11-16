@@ -39,23 +39,29 @@ export function initSettingsUI({ settings, onChange }) {
       body.append(group);
     }
 
-    // Sensitivity
-    const sens = document.createElement('fieldset');
-    sens.innerHTML = '<legend>Sensitivity</legend>';
-    const slider = document.createElement('input');
-    slider.type = 'range'; slider.min = '0.5'; slider.max = '2'; slider.step = '0.1';
-    slider.value = settings.sensitivity;
-    const val = document.createElement('span');
-    val.textContent = ` ${Number(settings.sensitivity).toFixed(1)}×`;
-    slider.oninput = () => {
-      settings.sensitivity = Number(slider.value);
-      val.textContent = ` ${settings.sensitivity.toFixed(1)}×`;
-      onChange();
+    // Sliders
+    const slider = (title, key, min, max, note) => {
+      const box = document.createElement('fieldset');
+      const lg = document.createElement('legend');
+      lg.textContent = title;
+      const input = document.createElement('input');
+      input.type = 'range'; input.min = String(min); input.max = String(max); input.step = '0.1';
+      input.value = settings[key];
+      input.dataset.key = key;
+      const val = document.createElement('span');
+      val.textContent = ` ${Number(settings[key]).toFixed(1)}×`;
+      input.oninput = () => {
+        settings[key] = Number(input.value);
+        val.textContent = ` ${settings[key].toFixed(1)}×`;
+        onChange();
+      };
+      const small = document.createElement('small');
+      small.textContent = note;
+      box.append(lg, input, val, document.createElement('br'), small);
+      body.append(box);
     };
-    const note = document.createElement('small');
-    note.textContent = 'Higher = a small movement scrolls / zooms more.';
-    sens.append(slider, val, document.createElement('br'), note);
-    body.append(sens);
+    slider('Scroll speed', 'scrollSpeed', 0.5, 4, 'Higher = the PDF scrolls further for the same hand movement. Raise it for long PDFs.');
+    slider('Sensitivity (zoom and everything else)', 'sensitivity', 0.5, 2, 'Higher = a small movement zooms more.');
 
     // On-screen feedback switch
     const fb = document.createElement('fieldset');

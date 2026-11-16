@@ -25,6 +25,15 @@ export const CONFIG = {
   joystickGain: 6000,     // px per second for each 1.0 of distance beyond the deadzone
   lZoomDeadzone: 0.01,    // ignore tiny changes in thumb-index gap
   lZoomPower: 2,          // how strongly a gap change becomes a zoom change
+  scrollBoostRef: 0.015,  // palm speed (fraction of frame per frame) at which scrolling gets +1x faster
+  scrollBoostMax: 3,      // ...up to this much extra, so a quick sweep covers a long PDF
+  thumbRampPerSec: 2.5,   // 👍/👎 scrolling gets this much faster for every second it is held
+  thumbRampMax: 4,        // ...up to this much extra
+  joystickBoost: 12,      // pushing the palm further makes the scrolling disproportionately faster
+  indexStraightMin: 0.9,  // L-shape zoom only counts while the index finger is this straight (1 = ruler)
+  zoomArmMs: 200,         // the pose must be held this long before zooming starts
+  zoomDelayMs: 120,       // zoom changes wait this long and are dropped if the pose changes (fist closing)
+  zoomMaxStep: 0.15,      // a thumb-index gap change bigger than this in ONE frame is a pose change, not a zoom
   smoothing: 0.5,         // 0..1, higher = follows the hand faster but jitters more
 };
 
@@ -38,6 +47,12 @@ export function extendedFingers(h) {
     out[name] = dist(h[tip], wrist) > dist(h[pip], wrist) * 1.05;
   }
   return out;
+}
+
+/** How straight is the index finger? ~1 = fully straight, lower = bent. */
+export function indexStraightness(h) {
+  const path = dist(h[5], h[6]) + dist(h[6], h[7]) + dist(h[7], h[8]);
+  return path === 0 ? 0 : dist(h[5], h[8]) / path;
 }
 
 /**
@@ -86,6 +101,9 @@ export function createController({ actions, getSettings = () => DEFAULT_SETTINGS
   let lastT = null;
   let anchorY = null;     // where the palm started, for joystick scrolling
   let lastGap = null;     // smoothed thumb-index gap, for L-shape zoom
+  let pendingZoom = [];   // zoom changes waiting out the safety delay
+  let gestureSince = 0;   // when the current pose began
+  let thumbSince = 0;     // when 👍/👎 scrolling began
 
   function emit(gesture, holdProgress = 0) {
     onState({ active, gesture, holdProgress });
@@ -97,14 +115,17 @@ export function createController({ actions, getSettings = () => DEFAULT_SETTINGS
 
     if (!hand) {
       holdStart = null; toggledThisHold = false; pos = null; prevGesture = null;
-      history = []; anchorY = null; lastGap = null;
+      history = []; anchorY = null; lastGap = null; pendingZoom = [];
       emit('none');
       return;
     }
 
     const settings = getSettings();
     const k = settings.sensitivity ?? 1;
+    const ks = k * (settings.scrollSpeed ?? 1); // scroll has its own extra speed setting
     const gesture = classify(hand);
+    if (gesture !== prevGesture) gestureSince = t;
+    const stableMs = t - gestureSince;
     const raw = hand[9]; // middle-finger base: a steady "palm centre"
     const a = CONFIG.smoothing;
     const prev = pos;
@@ -126,7 +147,7 @@ export function createController({ actions, getSettings = () => DEFAULT_SETTINGS
 
     // Keep per-pose state clean when the pose changes.
     if (gesture !== 'open') anchorY = null;
-    if (gesture !== 'lshape') lastGap = null;
+    if (gesture !== 'lshape') { lastGap = null; pendingZoom = []; }
 
     // 2) While ON, turn movement into actions.
     const same = gesture === prevGesture && prev;
@@ -138,18 +159,26 @@ export function createController({ actions, getSettings = () => DEFAULT_SETTINGS
       // ---- Scroll ----
       if (settings.scroll === 'palm-move') {
         if (gesture === 'open' && swipeQuiet && Math.abs(dy) > CONFIG.scrollDeadzone && Math.abs(dy) > Math.abs(dx)) {
-          actions.scrollBy(dy * CONFIG.scrollGain * k);
+          // Faster hand = disproportionately more scroll, so long PDFs are quick to cross.
+          const boost = 1 + Math.min(CONFIG.scrollBoostMax, Math.abs(dy) / CONFIG.scrollBoostRef);
+          actions.scrollBy(dy * CONFIG.scrollGain * ks * boost);
         }
       } else if (settings.scroll === 'thumbs') {
-        if (gesture === 'thumbup') actions.scrollBy(-CONFIG.thumbScrollSpeed * k * dt);
-        else if (gesture === 'thumbdown') actions.scrollBy(CONFIG.thumbScrollSpeed * k * dt);
+        if (gesture === 'thumbup' || gesture === 'thumbdown') {
+          if (stableMs === 0) thumbSince = t;
+          const held = (t - thumbSince) / 1000;
+          const ramp = 1 + Math.min(CONFIG.thumbRampMax, held * CONFIG.thumbRampPerSec); // longer hold = faster
+          const dir = gesture === 'thumbup' ? -1 : 1;
+          actions.scrollBy(dir * CONFIG.thumbScrollSpeed * ks * ramp * dt);
+        }
       } else if (settings.scroll === 'joystick') {
         if (gesture === 'open') {
           anchorY ??= pos.y;
           const off = pos.y - anchorY;
           if (swipeQuiet && Math.abs(off) > CONFIG.joystickDeadzone) {
             const beyond = Math.abs(off) - CONFIG.joystickDeadzone;
-            actions.scrollBy(Math.sign(off) * beyond * CONFIG.joystickGain * k * dt);
+            const curve = 1 + beyond * CONFIG.joystickBoost;
+            actions.scrollBy(Math.sign(off) * beyond * CONFIG.joystickGain * ks * curve * dt);
           }
         }
       }
@@ -174,18 +203,29 @@ export function createController({ actions, getSettings = () => DEFAULT_SETTINGS
 
       // ---- Zoom ----
       if (settings.zoom === 'pinch-move') {
-        if (gesture === 'pinch' && Math.abs(dy) > CONFIG.scrollDeadzone * 0.5) {
+        if (gesture === 'pinch' && stableMs >= CONFIG.zoomArmMs && Math.abs(dy) > CONFIG.scrollDeadzone * 0.5) {
           actions.zoomBy(Math.exp(-dy * CONFIG.zoomGain * k)); // hand up = zoom in
         }
       } else if (settings.zoom === 'l-spread') {
-        if (gesture === 'lshape') {
+        // Only a held, clearly straight-index "L" counts. Closing the hand into a fist
+        // squeezes thumb and index together for a few frames; those changes wait in
+        // `pendingZoom` and are thrown away when the pose changes.
+        if (gesture === 'lshape' && indexStraightness(hand) >= CONFIG.indexStraightMin) {
           const gap = dist(hand[4], hand[8]) / dist(hand[0], hand[9]);
           const smooth = lastGap == null ? gap : lastGap + (gap - lastGap) * 0.5;
-          if (lastGap != null) {
+          if (lastGap != null && stableMs >= CONFIG.zoomArmMs) {
             const ratio = smooth / lastGap;
-            if (Math.abs(ratio - 1) > CONFIG.lZoomDeadzone) actions.zoomBy(Math.pow(ratio, CONFIG.lZoomPower * k));
+            const step = Math.abs(ratio - 1);
+            if (step > CONFIG.zoomMaxStep) pendingZoom = []; // abrupt: a pose change, not a zoom
+            else if (step > CONFIG.lZoomDeadzone) pendingZoom.push({ t, f: Math.pow(ratio, CONFIG.lZoomPower * k) });
           }
           lastGap = smooth;
+          while (pendingZoom.length && t - pendingZoom[0].t >= CONFIG.zoomDelayMs) {
+            actions.zoomBy(pendingZoom.shift().f);
+          }
+        } else {
+          lastGap = null;
+          pendingZoom = [];
         }
       }
     } else {
