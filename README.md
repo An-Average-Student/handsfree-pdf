@@ -15,20 +15,24 @@ npm run dev
 
 Open the printed URL, then drop a PDF onto the page.
 
-## Controls today (keyboard fallback)
+## How to use
 
-| Key | Action |
+1. Click **Start camera** and allow access.
+2. Hold a **peace sign** (index + middle finger up) for 1 second to switch gesture control ON. Do it again to switch OFF.
+3. While ON:
+
+| Gesture | Action |
 |---|---|
-| ← / → | Previous / next page |
-| ↑ / ↓ | Scroll |
-| + / − | Zoom |
+| Open palm, move up / down | Scroll |
+| Open palm, quick swipe left / right | Previous / next page |
+| Pinch (thumb + index), move up / down | Zoom in / out |
+| Fist | Rest (nothing happens) |
 
-## Planned gestures
+The small bar under the camera preview shows what the app currently sees.
 
-- Open palm moving up/down: scroll
-- Swipe left/right: change page
-- Pinch in/out: zoom
-- Raised palm for 1 second: turn gesture control on/off
+Keyboard fallback: arrow keys (pages / scroll) and `+` / `-` (zoom).
+
+Run the logic tests with `npm test`.
 
 ## Built with
 

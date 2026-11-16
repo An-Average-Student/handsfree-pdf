@@ -113,11 +113,24 @@ viewer.addEventListener('drop', (e) => {
 
 // ---- Camera + hand tracking ------------------------------------------------
 import { startHandTracking } from './hands.js';
+import { createController } from './gestures.js';
 
 const camBtn = document.getElementById('camera-toggle');
 const camStatus = document.getElementById('camera-status');
 const camBox = document.getElementById('cam');
 let stopTracking = null;
+
+const hud = document.getElementById('cam-hud');
+const LABELS = { open: '🖐 open palm', fist: '✊ fist (resting)', peace: '✌️ peace', pinch: '👌 pinch', other: '… unrecognised', none: 'no hand seen' };
+const controller = createController({
+  actions,
+  onState: ({ active, gesture, holdProgress }) => {
+    const state = active ? 'ON' : 'OFF';
+    const hold = holdProgress > 0 && holdProgress < 1 ? ` · hold ${Math.round(holdProgress * 100)}%` : '';
+    hud.textContent = `${state} · ${LABELS[gesture]}${hold}`;
+    hud.className = active ? 'on' : '';
+  },
+});
 
 camBtn.onclick = async () => {
   if (stopTracking) {
@@ -135,7 +148,7 @@ camBtn.onclick = async () => {
       video: document.getElementById('cam-video'),
       overlay: document.getElementById('cam-overlay'),
       onStatus: (s) => (camStatus.textContent = s),
-      onFrame: (hand) => { /* gestures will plug in here */ },
+      onFrame: (hand) => controller.update(hand),
     });
     camBtn.textContent = 'Stop camera';
   } catch (err) {

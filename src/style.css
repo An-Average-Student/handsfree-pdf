@@ -28,3 +28,7 @@ button:hover, .btn:hover { background: #4a4a52; }
 #cam video, #cam canvas { position: absolute; inset: 0; width: 100%; height: 100%;
   transform: scaleX(-1); object-fit: cover; }
 #camera-status { font-size: 13px; opacity: .7; }
+
+#cam-hud { position: absolute; left: 0; right: 0; bottom: 0; padding: 5px 8px;
+  font-size: 12px; background: rgba(0,0,0,.65); color: #ddd; transform: none; height: auto; inset: auto 0 0 0; }
+#cam-hud.on { background: rgba(30,120,60,.85); color: #fff; }
