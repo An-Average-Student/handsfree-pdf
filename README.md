@@ -34,7 +34,22 @@ Open the printed URL, then drop a PDF onto the page.
 ✊ A fist is always the "rest" pose: nothing happens. The small bar under the camera
 preview shows what the app currently sees, which helps when a gesture isn't picked up.
 
-Keyboard fallback: arrow keys (pages / scroll) and `+` / `-` (zoom).
+## Presenting
+
+- **⛶ Present** (or press `F`): fullscreen, toolbar hidden, one page fitted to the screen. `Esc` exits.
+- **Fit width / Fit page** buttons size the PDF to your screen. New PDFs open fit-to-width.
+- A short message appears on the slide when a gesture fires (e.g. "➡ Page 2 / 10"). Turn it off in **⚙ Gestures**.
+- Several cameras? A dropdown appears next to **Start camera**. Your choice is remembered.
+
+## Keyboard shortcuts
+
+| Key | Action |
+|---|---|
+| `F` | Start / stop presentation mode |
+| `C` | Start / stop camera |
+| ← / → (or Page Up / Down) | Previous / next page |
+| ↑ / ↓ | Scroll |
+| `+` / `-` | Zoom |
 
 ## Adding a new gesture option
 

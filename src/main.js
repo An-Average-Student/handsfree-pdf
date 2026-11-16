@@ -193,7 +193,7 @@ document.getElementById('present').onclick = togglePresenting;
 document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement) leavePresenting(); });
 
 // ---- Camera + hand tracking ------------------------------------------------
-import { startHandTracking } from './hands.js';
+import { startHandTracking, listCameras, friendlyCameraError } from './hands.js';
 import { createController } from './gestures.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { initSettingsUI } from './settings-ui.js';
@@ -252,30 +252,68 @@ export const controller = createController({
   },
 });
 
-camBtn.onclick = async () => {
-  if (stopTracking) {
-    stopTracking();
-    stopTracking = null;
-    camBox.classList.remove('on');
-    camBtn.textContent = 'Start camera';
-    camStatus.textContent = '';
-    return;
-  }
+const camSelect = document.getElementById('camera-select');
+
+// Fill the dropdown with the available cameras (only shown if there is a choice).
+async function fillCameraList(currentId) {
+  try {
+    const cams = await listCameras();
+    camSelect.replaceChildren(...cams.map((c, i) => {
+      const o = document.createElement('option');
+      o.value = c.deviceId;
+      o.textContent = c.label || `Camera ${i + 1}`;
+      return o;
+    }));
+    if (cams.some((c) => c.deviceId === currentId)) camSelect.value = currentId;
+    camSelect.hidden = cams.length < 2;
+  } catch { camSelect.hidden = true; }
+}
+
+function stopCamera() {
+  stopTracking?.();
+  stopTracking = null;
+  camBox.classList.remove('on');
+  camBtn.textContent = 'Start camera';
+  camStatus.textContent = '';
+  camSelect.hidden = true;
+}
+
+async function startCamera() {
   camBtn.disabled = true;
   try {
     camBox.classList.add('on');
-    stopTracking = await startHandTracking({
+    const tracking = await startHandTracking({
       video: document.getElementById('cam-video'),
       overlay: document.getElementById('cam-overlay'),
+      deviceId: settings.cameraId,
       onStatus: (s) => (camStatus.textContent = s),
       onFrame: (hand) => controller.update(hand),
     });
+    stopTracking = tracking.stop;
+    settings.cameraId = tracking.deviceId; // remember which camera worked
+    saveSettings(settings);
     camBtn.textContent = 'Stop camera';
+    await fillCameraList(tracking.deviceId);
   } catch (err) {
     console.error(err);
     camBox.classList.remove('on');
-    camStatus.textContent = `Camera error: ${err.message}`;
+    camStatus.textContent = friendlyCameraError(err);
   } finally {
     camBtn.disabled = false;
   }
+}
+
+camBtn.onclick = () => (stopTracking ? stopCamera() : startCamera());
+
+// Switching camera = restart tracking on the new one.
+camSelect.onchange = async () => {
+  settings.cameraId = camSelect.value;
+  saveSettings(settings);
+  stopCamera();
+  await startCamera();
 };
+
+// A camera was plugged in or removed.
+navigator.mediaDevices?.addEventListener?.('devicechange', () => {
+  if (stopTracking) fillCameraList(settings.cameraId);
+});
