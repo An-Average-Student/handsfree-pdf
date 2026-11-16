@@ -13,6 +13,8 @@
         Open PDF
         <input id="file-input" type="file" accept="application/pdf" hidden />
       </label>
+      <button id="camera-toggle">Start camera</button>
+      <span id="camera-status"></span>
       <span class="spacer"></span>
       <button id="zoom-out" title="Zoom out (-)">−</button>
       <span id="zoom-label">100%</span>
@@ -24,6 +26,11 @@
       <div id="empty">Drop a PDF here, or click <em>Open PDF</em>.</div>
       <div id="pages"></div>
     </main>
+
+    <div id="cam">
+      <video id="cam-video" playsinline muted></video>
+      <canvas id="cam-overlay"></canvas>
+    </div>
 
     <script type="module" src="/src/main.js"></script>
   </body>

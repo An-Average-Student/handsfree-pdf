@@ -110,3 +110,39 @@ viewer.addEventListener('drop', (e) => {
   const f = e.dataTransfer.files[0];
   if (f && f.type === 'application/pdf') loadFile(f);
 });
+
+// ---- Camera + hand tracking ------------------------------------------------
+import { startHandTracking } from './hands.js';
+
+const camBtn = document.getElementById('camera-toggle');
+const camStatus = document.getElementById('camera-status');
+const camBox = document.getElementById('cam');
+let stopTracking = null;
+
+camBtn.onclick = async () => {
+  if (stopTracking) {
+    stopTracking();
+    stopTracking = null;
+    camBox.classList.remove('on');
+    camBtn.textContent = 'Start camera';
+    camStatus.textContent = '';
+    return;
+  }
+  camBtn.disabled = true;
+  try {
+    camBox.classList.add('on');
+    stopTracking = await startHandTracking({
+      video: document.getElementById('cam-video'),
+      overlay: document.getElementById('cam-overlay'),
+      onStatus: (s) => (camStatus.textContent = s),
+      onFrame: (hand) => { /* gestures will plug in here */ },
+    });
+    camBtn.textContent = 'Stop camera';
+  } catch (err) {
+    console.error(err);
+    camBox.classList.remove('on');
+    camStatus.textContent = `Camera error: ${err.message}`;
+  } finally {
+    camBtn.disabled = false;
+  }
+};
