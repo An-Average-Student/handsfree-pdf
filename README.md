@@ -6,6 +6,10 @@ your video never leaves your device.
 
 > Status: early development. The PDF viewer works; gesture control is next.
 
+## Try it online
+
+https://an-average-student.github.io/handsfree-pdf/
+
 ## Run locally
 
 ```bash
