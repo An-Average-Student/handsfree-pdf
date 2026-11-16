@@ -1,6 +1,6 @@
 # Handsfree PDF
 
-Present a PDF without touching your keyboard or mouse. Use your webcam and hand
+Present a PDF, Word document or PowerPoint deck without touching your keyboard or mouse. Use your webcam and hand
 gestures to scroll, change pages and zoom. Runs entirely in your browser, so
 your video never leaves your device.
 
@@ -9,6 +9,23 @@ your video never leaves your device.
 ## Try it online
 
 https://an-average-student.github.io/handsfree-pdf/
+
+## What it opens
+
+| Type | Notes |
+|---|---|
+| **PDF** | Best fidelity. |
+| **Word (.docx)** | Drawn in the browser, one page per Word page. |
+| **PowerPoint (.pptx)** | Drawn in the browser, one slide per page, any slide shape (4:3, 16:9...). |
+
+Drop a file on the page or click **Open file**. Everything happens on your device; files are never uploaded.
+
+**Good to know about Word and PowerPoint:** these are redrawn in the browser, so they won't look
+*identical* to the real app. Expect substituted fonts if yours aren't installed, no slide
+animations, transitions or embedded video, and charts that may not draw fully. If a file has to
+look exactly right, export it to PDF first. Old `.doc` / `.ppt` files aren't supported (save as
+`.docx` / `.pptx`). A Word file with no page breaks shows as one long page, and "next page"
+then scrolls a screenful.
 
 ## Run locally
 
@@ -63,8 +80,14 @@ preview shows what the app currently sees, which helps when a gesture isn't pick
 
 ## Built with
 
-[PDF.js](https://github.com/mozilla/pdf.js), [MediaPipe Hands](https://github.com/google-ai-edge/mediapipe) (coming soon) and [Vite](https://vitejs.dev).
+[PDF.js](https://github.com/mozilla/pdf.js), [docx-preview](https://github.com/VolodymyrBaydalka/docxjs), [pptx-preview](https://github.com/501351981/pptx-preview), [docx-preview](https://github.com/VolodymyrBaydalka/docxjs), [pptx-preview](https://github.com/501351981/pptx-preview), [MediaPipe Hands](https://github.com/google-ai-edge/mediapipe) (coming soon) and [Vite](https://vitejs.dev).
 
 ## License
 
 MIT
+
+## Developer note
+
+`package.json` pins `echarts` and `uuid` through `overrides`. `pptx-preview` depends on older versions with
+known moderate security advisories, and a malicious .pptx is exactly the input that could reach them.
+If you update `pptx-preview`, run `npm audit` and re-test a deck that contains a chart before removing the overrides.

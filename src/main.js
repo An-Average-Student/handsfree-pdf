@@ -1,6 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 // "?url" tells Vite to give us the file's address instead of running it.
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { fileKind, unsupportedMessage, ACCEPT } from './filetypes.js';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
 
@@ -14,34 +15,84 @@ const BASE_SCALE = 1.3; // zoom 1 (= "100%") draws a page at 1.3x its natural PD
 const MIN_ZOOM = 0.3;
 const MAX_ZOOM = 4;
 
-let pdf = null;
+let pdf = null;     // set when a PDF is open
+let domDoc = null;  // set when a Word / PowerPoint file is open: { count }
 let zoom = 1; // 1 = 100%
 let fitMode = 'width'; // 'width' | 'page' | null (null = user zoomed manually)
 let renderToken = 0; // lets us cancel an old render if the zoom changes again
 
 // ---- Loading ---------------------------------------------------------------
-async function loadFile(file) {
+const pageCount = () => pdf?.numPages ?? domDoc?.count ?? 0;
+const pageEls = () => pagesEl.querySelectorAll('[data-page]');
+
+async function loadPdf(file) {
   const data = new Uint8Array(await file.arrayBuffer());
-  pdf = await pdfjsLib.getDocument({ data }).promise;
-  emptyEl.hidden = true;
-  fitMode = 'width'; // a sensible starting size for every new PDF
-  await applyFit();
-  await renderAll();
+  const doc = await pdfjsLib.getDocument({ data }).promise;
+  pdf = doc; domDoc = null;
+  pagesEl.style.zoom = '';
+}
+
+// Word / PowerPoint: drawn as normal web page content, one element per page / slide.
+async function loadDom(kind, file) {
+  const { renderDocx, renderPptx } = await import('./formats.js'); // loaded only when needed
+  const { holder, pages } = await (kind === 'docx' ? renderDocx(file) : renderPptx(file));
+  pages.forEach((el, i) => { el.dataset.page = i + 1; });
+  pagesEl.style.zoom = '';
+  pagesEl.replaceChildren(holder);
+  domDoc = { count: pages.length };
+  pdf = null;
+}
+
+async function loadFile(file) {
+  const kind = fileKind(file);
+  if (kind !== 'pdf' && kind !== 'docx' && kind !== 'pptx') {
+    showToast(unsupportedMessage(kind), 4500);
+    return;
+  }
+  showToast(`Opening ${file.name}\u2026`, 60000);
+  try {
+    await (kind === 'pdf' ? loadPdf(file) : loadDom(kind, file));
+    emptyEl.hidden = true;
+    viewer.scrollTop = 0;
+    fitMode = 'width'; // a sensible starting size for every new file
+    await applyFit();
+    await renderAll();
+    hideToast();
+  } catch (err) {
+    console.error(err);
+    showToast(`Couldn\u2019t open that file. ${err?.message ?? ''}`.trim(), 5000);
+  }
 }
 
 // ---- Fit to screen ---------------------------------------------------------
 // Works out the zoom that makes the first page fill the width (or the whole
 // screen) and stores it in `zoom`. Rendering happens separately in renderAll().
 async function applyFit() {
-  if (!pdf || !fitMode) return;
-  const page = await pdf.getPage(1);
-  const natural = page.getViewport({ scale: 1 });
+  if (!pageCount() || !fitMode) return;
   const availW = viewer.clientWidth - 32;  // 16px padding each side
   const availH = viewer.clientHeight - 32;
-  const scale = fitMode === 'width'
-    ? availW / natural.width
-    : Math.min(availW / natural.width, availH / natural.height);
-  zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, scale / BASE_SCALE));
+  const wanted = (w, h) => (fitMode === 'width' ? availW / w : Math.min(availW / w, availH / h));
+
+  if (domDoc) {
+    // Word / PowerPoint pages don't scale perfectly smoothly (text re-wraps at some zoom
+    // levels), so measure the page as actually drawn. Keep correcting, and in the end
+    // choose the largest zoom we saw that still fits: never one that gets cut off.
+    let best = null;
+    for (let i = 0; i < 8; i++) {
+      pagesEl.style.zoom = String(zoom * BASE_SCALE);
+      const r = pageEls()[0].getBoundingClientRect();
+      const f = wanted(r.width, r.height); // <1 means "too big", >1 means "room to grow"
+      const fits = f >= 0.996;
+      if (fits && (best === null || zoom > best)) best = zoom;
+      if (fits && f < 1.005) break; // close enough
+      zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * f));
+    }
+    zoom = best ?? Math.max(MIN_ZOOM, zoom * 0.9);
+    pagesEl.style.zoom = String(zoom * BASE_SCALE);
+    return;
+  }
+  const v = (await pdf.getPage(1)).getViewport({ scale: 1 });
+  zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, wanted(v.width, v.height) / BASE_SCALE));
 }
 
 async function fitTo(mode) {
@@ -51,8 +102,21 @@ async function fitTo(mode) {
 }
 
 // ---- Rendering -------------------------------------------------------------
+// Remember how far down the document we are, as a fraction, so zooming or fitting
+// keeps you at the same place instead of jumping.
+const readingPosition = () => (viewer.scrollHeight ? viewer.scrollTop / viewer.scrollHeight : 0);
+const restorePosition = (p) => { viewer.scrollTop = p * viewer.scrollHeight; };
+
 async function renderAll() {
+  if (domDoc) { // Word / PowerPoint: just scale the page content, no re-drawing needed
+    const pos = readingPosition();
+    pagesEl.style.zoom = String(zoom * BASE_SCALE);
+    restorePosition(pos);
+    updateLabels();
+    return;
+  }
   if (!pdf) return;
+  const pos = readingPosition();
   const token = ++renderToken;
   const dpr = window.devicePixelRatio || 1;
   const frag = document.createDocumentFragment();
@@ -72,6 +136,7 @@ async function renderAll() {
     canvases.push({ page, canvas, viewport });
   }
   pagesEl.replaceChildren(frag);
+  restorePosition(pos);
   for (const { page, canvas, viewport } of canvases) {
     if (token !== renderToken) return;
     await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
@@ -81,14 +146,15 @@ async function renderAll() {
 
 function updateLabels() {
   zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
-  pageLabel.textContent = pdf ? `Page ${currentPage()} / ${pdf.numPages}` : '';
+  pageLabel.textContent = pageCount() ? `Page ${currentPage()} / ${pageCount()}` : '';
 }
 
 function currentPage() {
-  const mid = viewer.scrollTop + viewer.clientHeight / 2;
+  // Positions are measured on screen, so this works with any page type and any zoom.
+  const mid = viewer.getBoundingClientRect().top + viewer.clientHeight / 2;
   let best = 1;
-  for (const c of pagesEl.children) {
-    if (c.offsetTop <= mid) best = Number(c.dataset.page);
+  for (const el of pageEls()) {
+    if (el.getBoundingClientRect().top <= mid) best = Number(el.dataset.page);
   }
   return best;
 }
@@ -96,8 +162,8 @@ function currentPage() {
 // ---- Actions (gestures will call these later) ------------------------------
 export const actions = {
   scrollBy: (dy) => viewer.scrollBy({ top: dy }),
-  nextPage: () => goToPage(currentPage() + 1),
-  prevPage: () => goToPage(currentPage() - 1),
+  nextPage: () => step(1),
+  prevPage: () => step(-1),
   zoomBy: (factor) => {
     fitMode = null; // manual zoom overrides fit
     zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * factor));
@@ -108,12 +174,24 @@ export const actions = {
 };
 
 function goToPage(n) {
-  if (!pdf) return;
-  const target = pagesEl.querySelector(`canvas[data-page="${Math.min(pdf.numPages, Math.max(1, n))}"]`);
+  const count = pageCount();
+  if (!count) return;
+  const target = pagesEl.querySelector(`[data-page="${Math.min(count, Math.max(1, n))}"]`);
   target?.scrollIntoView({ behavior: 'smooth', block: 'start' });
 }
 
+// Next / previous page. A Word file with no page breaks comes out as ONE very tall
+// page, so in that case move by (nearly) a screenful instead.
+function step(dir) {
+  if (domDoc && domDoc.count === 1) {
+    viewer.scrollBy({ top: dir * viewer.clientHeight * 0.9, behavior: 'smooth' });
+  } else {
+    goToPage(currentPage() + dir);
+  }
+}
+
 // ---- Mouse / keyboard (our fallback controls) ------------------------------
+document.getElementById('file-input').accept = ACCEPT;
 document.getElementById('file-input').addEventListener('change', (e) => {
   if (e.target.files[0]) loadFile(e.target.files[0]);
 });
@@ -150,7 +228,7 @@ window.addEventListener('keydown', (e) => {
   viewer.addEventListener(t, (e) => { e.preventDefault(); viewer.classList.remove('dragging'); }));
 viewer.addEventListener('drop', (e) => {
   const f = e.dataTransfer.files[0];
-  if (f && f.type === 'application/pdf') loadFile(f);
+  if (f) loadFile(f);
 });
 
 // ---- Small on-screen messages ----------------------------------------------
@@ -161,6 +239,11 @@ export function showToast(text, ms = 1600) {
   toastEl.classList.add('show');
   clearTimeout(toastTimer);
   toastTimer = setTimeout(() => toastEl.classList.remove('show'), ms);
+}
+
+export function hideToast() {
+  clearTimeout(toastTimer);
+  toastEl.classList.remove('show');
 }
 
 // ---- Presentation mode -----------------------------------------------------
@@ -223,11 +306,11 @@ export const feedbackActions = {
     if (now - lastScrollToast > 800) { say(dy > 0 ? '⬇ Scrolling' : '⬆ Scrolling', 900); lastScrollToast = now; }
   },
   nextPage: () => {
-    if (pdf) say(`➡ Page ${Math.min(pdf.numPages, currentPage() + 1)} / ${pdf.numPages}`);
+    if (pageCount()) say(`➡ Page ${Math.min(pageCount(), currentPage() + 1)} / ${pageCount()}`);
     actions.nextPage();
   },
   prevPage: () => {
-    if (pdf) say(`⬅ Page ${Math.max(1, currentPage() - 1)} / ${pdf.numPages}`);
+    if (pageCount()) say(`⬅ Page ${Math.max(1, currentPage() - 1)} / ${pageCount()}`);
     actions.prevPage();
   },
   zoomBy: (factor) => {

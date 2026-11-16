@@ -10,13 +10,20 @@
     "prebuild": "node scripts/copy-wasm.js",
     "build": "vite build",
     "preview": "vite preview",
-    "test": "node --test tests/gestures.test.js"
+    "test": "node --test tests/*.test.js"
   },
   "devDependencies": {
     "vite": "^8.3.8"
   },
   "dependencies": {
     "@mediapipe/tasks-vision": "^1.2.3",
-    "pdfjs-dist": "^6.5.438"
+    "docx-preview": "^0.4.1",
+    "jszip": "^3.10.2",
+    "pdfjs-dist": "^6.5.438",
+    "pptx-preview": "^1.0.7"
+  },
+  "overrides": {
+    "echarts": "^6.1.0",
+    "uuid": "^11.1.1"
   }
 }
