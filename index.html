@@ -1,0 +1,30 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Handsfree PDF</title>
+    <link rel="stylesheet" href="/src/style.css" />
+  </head>
+  <body>
+    <header id="toolbar">
+      <strong>Handsfree PDF</strong>
+      <label class="btn">
+        Open PDF
+        <input id="file-input" type="file" accept="application/pdf" hidden />
+      </label>
+      <span class="spacer"></span>
+      <button id="zoom-out" title="Zoom out (-)">−</button>
+      <span id="zoom-label">100%</span>
+      <button id="zoom-in" title="Zoom in (+)">+</button>
+      <span id="page-label"></span>
+    </header>
+
+    <main id="viewer">
+      <div id="empty">Drop a PDF here, or click <em>Open PDF</em>.</div>
+      <div id="pages"></div>
+    </main>
+
+    <script type="module" src="/src/main.js"></script>
+  </body>
+</html>
