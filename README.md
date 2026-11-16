@@ -80,7 +80,7 @@ preview shows what the app currently sees, which helps when a gesture isn't pick
 
 ## Built with
 
-[PDF.js](https://github.com/mozilla/pdf.js), [docx-preview](https://github.com/VolodymyrBaydalka/docxjs), [pptx-preview](https://github.com/501351981/pptx-preview), [docx-preview](https://github.com/VolodymyrBaydalka/docxjs), [pptx-preview](https://github.com/501351981/pptx-preview), [MediaPipe Hands](https://github.com/google-ai-edge/mediapipe) (coming soon) and [Vite](https://vitejs.dev).
+[PDF.js](https://github.com/mozilla/pdf.js) (PDF), [docx-preview](https://github.com/VolodymyrBaydalka/docxjs) (Word), [pptx-preview](https://www.npmjs.com/package/pptx-preview) (PowerPoint), [MediaPipe Hands](https://github.com/google-ai-edge/mediapipe) (hand tracking) and [Vite](https://vitejs.dev).
 
 ## License
 
