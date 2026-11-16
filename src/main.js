@@ -10,8 +10,13 @@ const emptyEl = document.getElementById('empty');
 const zoomLabel = document.getElementById('zoom-label');
 const pageLabel = document.getElementById('page-label');
 
+const BASE_SCALE = 1.3; // zoom 1 (= "100%") draws a page at 1.3x its natural PDF size
+const MIN_ZOOM = 0.3;
+const MAX_ZOOM = 4;
+
 let pdf = null;
 let zoom = 1; // 1 = 100%
+let fitMode = 'width'; // 'width' | 'page' | null (null = user zoomed manually)
 let renderToken = 0; // lets us cancel an old render if the zoom changes again
 
 // ---- Loading ---------------------------------------------------------------
@@ -19,6 +24,29 @@ async function loadFile(file) {
   const data = new Uint8Array(await file.arrayBuffer());
   pdf = await pdfjsLib.getDocument({ data }).promise;
   emptyEl.hidden = true;
+  fitMode = 'width'; // a sensible starting size for every new PDF
+  await applyFit();
+  await renderAll();
+}
+
+// ---- Fit to screen ---------------------------------------------------------
+// Works out the zoom that makes the first page fill the width (or the whole
+// screen) and stores it in `zoom`. Rendering happens separately in renderAll().
+async function applyFit() {
+  if (!pdf || !fitMode) return;
+  const page = await pdf.getPage(1);
+  const natural = page.getViewport({ scale: 1 });
+  const availW = viewer.clientWidth - 32;  // 16px padding each side
+  const availH = viewer.clientHeight - 32;
+  const scale = fitMode === 'width'
+    ? availW / natural.width
+    : Math.min(availW / natural.width, availH / natural.height);
+  zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, scale / BASE_SCALE));
+}
+
+async function fitTo(mode) {
+  fitMode = mode;
+  await applyFit();
   await renderAll();
 }
 
@@ -33,7 +61,7 @@ async function renderAll() {
   for (let n = 1; n <= pdf.numPages; n++) {
     const page = await pdf.getPage(n);
     if (token !== renderToken) return; // zoom changed; abandon this render
-    const viewport = page.getViewport({ scale: zoom * 1.3 * dpr });
+    const viewport = page.getViewport({ scale: zoom * BASE_SCALE * dpr });
     const canvas = document.createElement('canvas');
     canvas.width = viewport.width;
     canvas.height = viewport.height;
@@ -71,7 +99,8 @@ export const actions = {
   nextPage: () => goToPage(currentPage() + 1),
   prevPage: () => goToPage(currentPage() - 1),
   zoomBy: (factor) => {
-    zoom = Math.min(4, Math.max(0.3, zoom * factor));
+    fitMode = null; // manual zoom overrides fit
+    zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * factor));
     zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
     clearTimeout(actions._t);
     actions._t = setTimeout(renderAll, 150); // wait until zooming settles
@@ -90,6 +119,15 @@ document.getElementById('file-input').addEventListener('change', (e) => {
 });
 document.getElementById('zoom-in').onclick = () => actions.zoomBy(1.2);
 document.getElementById('zoom-out').onclick = () => actions.zoomBy(1 / 1.2);
+document.getElementById('fit-width').onclick = () => fitTo('width');
+document.getElementById('fit-page').onclick = () => fitTo('page');
+
+// Keep the fit when the window is resized (e.g. entering fullscreen).
+let resizeTimer;
+window.addEventListener('resize', () => {
+  clearTimeout(resizeTimer);
+  resizeTimer = setTimeout(async () => { if (fitMode) await fitTo(fitMode); }, 200);
+});
 viewer.addEventListener('scroll', updateLabels);
 
 window.addEventListener('keydown', (e) => {
