@@ -1,6 +1,7 @@
 import * as pdfjsLib from 'pdfjs-dist';
 // "?url" tells Vite to give us the file's address instead of running it.
 import workerUrl from 'pdfjs-dist/build/pdf.worker.min.mjs?url';
+import { createPdfView } from './pdf-view.js';
 import { fileKind, unsupportedMessage, ACCEPT, tooLarge, TOO_LARGE_TEXT } from './filetypes.js';
 
 pdfjsLib.GlobalWorkerOptions.workerSrc = workerUrl;
@@ -19,7 +20,7 @@ let pdf = null;     // set when a PDF is open
 let domDoc = null;  // set when a Word / PowerPoint file is open: { count }
 let zoom = 1; // 1 = 100%
 let fitMode = 'width'; // 'width' | 'page' | null (null = user zoomed manually)
-let renderToken = 0; // lets us cancel an old render if the zoom changes again
+const pdfView = createPdfView({ viewer, pagesEl }); // draws only the PDF pages near the screen
 
 // ---- Loading ---------------------------------------------------------------
 const pageCount = () => pdf?.numPages ?? domDoc?.count ?? 0;
@@ -29,8 +30,10 @@ async function loadPdf(file) {
   const data = new Uint8Array(await file.arrayBuffer());
   // No eval, no XFA forms: we only want to *show* pages, never run anything from the file.
   const doc = await pdfjsLib.getDocument({ data, isEvalSupported: false, enableXfa: false }).promise;
+  const first = (await doc.getPage(1)).getViewport({ scale: 1 });
   pdf = doc; domDoc = null;
   pagesEl.style.zoom = '';
+  pdfView.open(doc, first, zoom * BASE_SCALE);
 }
 
 // Word / PowerPoint: drawn as normal web page content, one element per page / slide.
@@ -38,6 +41,7 @@ async function loadDom(kind, file) {
   const { renderDocx, renderPptx } = await import('./formats.js'); // loaded only when needed
   const { holder, pages } = await (kind === 'docx' ? renderDocx(file) : renderPptx(file));
   pages.forEach((el, i) => { el.dataset.page = i + 1; });
+  pdfView.close(); // free the PDF pages, if one was open
   pagesEl.style.zoom = '';
   pagesEl.replaceChildren(holder);
   domDoc = { count: pages.length };
@@ -110,39 +114,16 @@ const readingPosition = () => (viewer.scrollHeight ? viewer.scrollTop / viewer.s
 const restorePosition = (p) => { viewer.scrollTop = p * viewer.scrollHeight; };
 
 async function renderAll() {
+  const pos = readingPosition();
   if (domDoc) { // Word / PowerPoint: just scale the page content, no re-drawing needed
-    const pos = readingPosition();
     pagesEl.style.zoom = String(zoom * BASE_SCALE);
-    restorePosition(pos);
-    updateLabels();
+  } else if (pdf) { // PDF: resize every page now; sharp drawing of the visible ones follows
+    pdfView.setScale(zoom * BASE_SCALE);
+    pdfView.refresh();
+  } else {
     return;
   }
-  if (!pdf) return;
-  const pos = readingPosition();
-  const token = ++renderToken;
-  const dpr = window.devicePixelRatio || 1;
-  const frag = document.createDocumentFragment();
-  const canvases = [];
-
-  for (let n = 1; n <= pdf.numPages; n++) {
-    const page = await pdf.getPage(n);
-    if (token !== renderToken) return; // zoom changed; abandon this render
-    const viewport = page.getViewport({ scale: zoom * BASE_SCALE * dpr });
-    const canvas = document.createElement('canvas');
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-    canvas.style.width = `${viewport.width / dpr}px`;
-    canvas.style.height = `${viewport.height / dpr}px`;
-    canvas.dataset.page = n;
-    frag.appendChild(canvas);
-    canvases.push({ page, canvas, viewport });
-  }
-  pagesEl.replaceChildren(frag);
   restorePosition(pos);
-  for (const { page, canvas, viewport } of canvases) {
-    if (token !== renderToken) return;
-    await page.render({ canvasContext: canvas.getContext('2d'), viewport }).promise;
-  }
   updateLabels();
 }
 
@@ -170,8 +151,7 @@ export const actions = {
     fitMode = null; // manual zoom overrides fit
     zoom = Math.min(MAX_ZOOM, Math.max(MIN_ZOOM, zoom * factor));
     zoomLabel.textContent = `${Math.round(zoom * 100)}%`;
-    clearTimeout(actions._t);
-    actions._t = setTimeout(renderAll, 150); // wait until zooming settles
+    renderAll(); // cheap: pages are resized at once, sharp drawing follows when zooming settles
   },
 };
 
