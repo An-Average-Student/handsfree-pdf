@@ -60,3 +60,10 @@ body.presenting #viewer { padding: 16px; }
 /* Word pages: draw them like paper (the viewer itself is dark) */
 #pages section.docx { background: #fff; color: #000; box-shadow: 0 2px 10px rgba(0,0,0,.5); margin-bottom: 12px; }
 #pages .docx-wrapper { background: transparent; padding: 0; display: flex; flex-direction: column; align-items: center; }
+
+/* Laser pointer dot (positioned from the fingertip) */
+#laser { position: fixed; left: 0; top: 0; width: 22px; height: 22px; margin: -11px 0 0 -11px;
+  border-radius: 50%; background: #ff2d2d; border: 2px solid #fff; pointer-events: none; z-index: 20;
+  box-shadow: 0 0 14px 5px rgba(255,45,45,.7); }
+#laser[hidden] { display: none; }
+small.warn { display: block; color: #ffb454; margin-top: 4px; opacity: 1; }

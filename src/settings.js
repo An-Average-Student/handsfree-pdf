@@ -28,9 +28,16 @@ export const OPTIONS = {
       { id: 'off', icon: '⛔', title: 'Off', hint: 'No gesture zoom.' },
     ],
   },
+  pointer: {
+    label: 'Laser pointer',
+    choices: [
+      { id: 'point', icon: '🔴', title: 'Point with index finger', hint: 'A red dot follows your fingertip while you point (thumb tucked in). It disappears when you stop.' },
+      { id: 'off', icon: '⛔', title: 'Off', hint: 'No pointer.' },
+    ],
+  },
 };
 
-export const DEFAULT_SETTINGS = { scroll: 'palm-move', page: 'palm-swipe', zoom: 'pinch-move', sensitivity: 1, scrollSpeed: 1.5, feedback: true, cameraId: '' };
+export const DEFAULT_SETTINGS = { scroll: 'palm-move', page: 'palm-swipe', zoom: 'pinch-move', sensitivity: 1, scrollSpeed: 1.5, pointer: 'point', pointerGain: 1.6, feedback: true, cameraId: '' };
 
 const KEY = 'handsfree-pdf-settings-v1';
 
@@ -48,6 +55,9 @@ export function loadSettings() {
       }
       if (typeof saved.scrollSpeed === 'number' && saved.scrollSpeed >= 0.5 && saved.scrollSpeed <= 4) {
         s.scrollSpeed = saved.scrollSpeed;
+      }
+      if (typeof saved.pointerGain === 'number' && saved.pointerGain >= 1 && saved.pointerGain <= 3) {
+        s.pointerGain = saved.pointerGain;
       }
       if (typeof saved.feedback === 'boolean') s.feedback = saved.feedback;
       if (typeof saved.cameraId === 'string') s.cameraId = saved.cameraId;

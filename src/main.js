@@ -320,8 +320,17 @@ export const feedbackActions = {
 };
 
 let wasActive = false;
+const laser = document.getElementById('laser');
+function movePointer(p) {
+  if (!p) { laser.hidden = true; return; }
+  laser.hidden = false;
+  laser.style.left = `${p.x * 100}vw`;
+  laser.style.top = `${p.y * 100}vh`;
+}
+
 export const controller = createController({
   actions: feedbackActions,
+  onPointer: movePointer,
   getSettings: () => settings,
   onState: ({ active, gesture, holdProgress }) => {
     if (active !== wasActive) {
@@ -359,6 +368,7 @@ function stopCamera() {
   camBtn.textContent = 'Start camera';
   camStatus.textContent = '';
   camSelect.hidden = true;
+  movePointer(null);
 }
 
 async function startCamera() {

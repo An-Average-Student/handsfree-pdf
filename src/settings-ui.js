@@ -36,6 +36,12 @@ export function initSettingsUI({ settings, onChange }) {
         row.append(input, text);
         group.append(row);
       }
+      if (action === 'pointer' && settings.pointer === 'point' && settings.page === 'point-swipe') {
+        const warn = document.createElement('small');
+        warn.className = 'warn';
+        warn.textContent = '⚠ Not available right now: "Change page" is using the index-finger swipe, which is the same pose.';
+        group.append(warn);
+      }
       body.append(group);
     }
 
@@ -61,6 +67,7 @@ export function initSettingsUI({ settings, onChange }) {
       body.append(box);
     };
     slider('Scroll speed', 'scrollSpeed', 0.5, 4, 'Higher = the PDF scrolls further for the same hand movement. Raise it for long PDFs.');
+    slider('Pointer speed', 'pointerGain', 1, 3, 'Higher = small hand movements move the dot further. Lower = steadier, but you reach further.');
     slider('Sensitivity (zoom and everything else)', 'sensitivity', 0.5, 2, 'Higher = a small movement zooms more.');
 
     // On-screen feedback switch

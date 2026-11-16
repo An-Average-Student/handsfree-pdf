@@ -7,6 +7,7 @@
 //   x,y are 0..1 across the camera frame (y grows downward).
 
 import { DEFAULT_SETTINGS } from './settings.js';
+import { OneEuroFilter, POINTER_FILTER } from './filters.js';
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -34,6 +35,8 @@ export const CONFIG = {
   zoomArmMs: 200,         // the pose must be held this long before zooming starts
   zoomDelayMs: 120,       // zoom changes wait this long and are dropped if the pose changes (fist closing)
   zoomMaxStep: 0.15,      // a thumb-index gap change bigger than this in ONE frame is a pose change, not a zoom
+  pointerCenterY: 0.55,   // the camera row that maps to the middle of the screen (hands sit a bit low)
+  pointerGraceMs: 200,    // keep the dot visible this long after pointing stops (pose flicker)
   smoothing: 0.5,         // 0..1, higher = follows the hand faster but jitters more
 };
 
@@ -47,6 +50,19 @@ export function extendedFingers(h) {
     out[name] = dist(h[tip], wrist) > dist(h[pip], wrist) * 1.05;
   }
   return out;
+}
+
+/**
+ * Maps a fingertip position in the camera picture (0..1) to a spot on the screen (0..1).
+ * Only the middle of the camera view is used (gain > 1), so you don't have to stretch
+ * your arm to reach the screen edges. x is mirrored: your right = screen right.
+ */
+export function toScreen(tip, gain) {
+  const clamp = (v) => Math.min(1, Math.max(0, v));
+  return {
+    x: clamp(0.5 + (0.5 - tip.x) * gain),
+    y: clamp(0.5 + (tip.y - CONFIG.pointerCenterY) * gain),
+  };
 }
 
 /** How straight is the index finger? ~1 = fully straight, lower = bent. */
@@ -90,7 +106,7 @@ export function classify(h) {
  * getSettings(): current choices (see settings.js); read every frame so changes apply instantly.
  * onState({ active, gesture, holdProgress }) is called every frame for the on-screen HUD.
  */
-export function createController({ actions, getSettings = () => DEFAULT_SETTINGS, onState = () => {} }) {
+export function createController({ actions, getSettings = () => DEFAULT_SETTINGS, onState = () => {}, onPointer = () => {} }) {
   let active = false;
   let holdStart = null;
   let toggledThisHold = false;
@@ -104,6 +120,19 @@ export function createController({ actions, getSettings = () => DEFAULT_SETTINGS
   let pendingZoom = [];   // zoom changes waiting out the safety delay
   let gestureSince = 0;   // when the current pose began
   let thumbSince = 0;     // when 👍/👎 scrolling began
+  const fx = new OneEuroFilter(POINTER_FILTER); // smooths the pointer dot
+  const fy = new OneEuroFilter(POINTER_FILTER);
+  let pointerShown = false;
+  let lastPointAt = 0;
+
+  // Hide the dot once pointing has stopped for a moment (not on a one-frame flicker).
+  function hidePointer(t) {
+    if (pointerShown && t - lastPointAt > CONFIG.pointerGraceMs) {
+      pointerShown = false;
+      fx.reset(); fy.reset();
+      onPointer(null);
+    }
+  }
 
   function emit(gesture, holdProgress = 0) {
     onState({ active, gesture, holdProgress });
@@ -116,6 +145,7 @@ export function createController({ actions, getSettings = () => DEFAULT_SETTINGS
     if (!hand) {
       holdStart = null; toggledThisHold = false; pos = null; prevGesture = null;
       history = []; anchorY = null; lastGap = null; pendingZoom = [];
+      hidePointer(t);
       emit('none');
       return;
     }
@@ -143,6 +173,19 @@ export function createController({ actions, getSettings = () => DEFAULT_SETTINGS
     } else {
       holdStart = null;
       toggledThisHold = false;
+    }
+
+    // Laser pointer: a red dot on the fingertip while pointing. (Pointing with the index
+    // finger is also the page-swipe pose, so the pointer steps aside if that is chosen.)
+    const pointing = active && settings.pointer === 'point' && settings.page !== 'point-swipe'
+      && (gesture === 'point' || (gesture === 'lshape' && settings.zoom !== 'l-spread'));
+    if (pointing) {
+      const s = toScreen(hand[8], settings.pointerGain ?? 1.6);
+      onPointer({ x: fx.filter(s.x, t), y: fy.filter(s.y, t) });
+      pointerShown = true;
+      lastPointAt = t;
+    } else {
+      hidePointer(t);
     }
 
     // Keep per-pose state clean when the pose changes.

@@ -47,10 +47,13 @@ Open the printed URL, then drop a PDF onto the page.
 | Scroll | Open palm up/down (default) · Thumbs up/down · Open palm "joystick" · Off |
 | Change page | Open palm swipe (default) · Index-finger swipe · Off |
 | Zoom | Pinch + move up/down (default) · L-shape spread/close · Off |
+| Laser pointer | ☝️ Point with your index finger (default) · Off |
 
 **Faster scrolling on long PDFs:** a quicker hand scrolls disproportionately further, holding 👍/👎 speeds up the longer you hold it, and **Scroll speed** in ⚙ Gestures scales it all (0.5× to 4×).
 
 **Zoom safety:** L-shape zoom only counts while your index finger is straight and the L has been held for a moment, and changes are discarded if you close your hand into a fist.
+
+**Laser pointer:** with gestures ON, point with your index finger (thumb tucked in) and a red dot follows your fingertip. It hides about 0.2 s after you stop pointing. Only the middle of the camera view is used, so you don't have to stretch your arm to reach the screen edges; **Pointer speed** in ⚙ Gestures adjusts that. The dot is smoothed with a [One Euro filter](https://gery.casiez.net/1euro/) so it doesn't shake. Pointing is also the pose for the optional index-finger page swipe, so pick one of the two.
 
 ✊ A fist is always the "rest" pose: nothing happens. The small bar under the camera
 preview shows what the app currently sees, which helps when a gesture isn't picked up.

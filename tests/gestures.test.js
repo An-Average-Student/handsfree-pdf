@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { classify, createController, indexStraightness } from '../src/gestures.js';
+import { classify, createController, indexStraightness, toScreen } from '../src/gestures.js';
 import { DEFAULT_SETTINGS } from '../src/settings.js';
 
 // Build a fake hand (21 points) pointing up, with chosen fingers straight or curled.
@@ -35,8 +35,9 @@ function setup(overrides = {}) {
     prevPage: () => calls.push(['prev']),
     zoomBy: (f) => calls.push(['zoom', f]),
   };
+  const pointer = [];
   const settings = { ...DEFAULT_SETTINGS, ...overrides };
-  return { calls, c: createController({ actions, getSettings: () => settings }) };
+  return { calls, pointer, c: createController({ actions, getSettings: () => settings, onPointer: (p) => pointer.push(p) }) };
 }
 const peace = () => makeHand({ index: 1, middle: 1 });
 const open = (o) => makeHand({ index: 1, middle: 1, ring: 1, pinky: 1, ...o });
@@ -216,4 +217,79 @@ test('holding 👍 longer scrolls faster', () => {
   for (let i = 0; i < 60; i++, t += 33) c.update(makeHand({ thumb: 'up' }), t);
   const s = calls.filter((x) => x[0] === 'scroll').map((x) => Math.abs(x[1]));
   assert.ok(s[s.length - 1] > s[1] * 3, `first=${s[1]} last=${s[s.length - 1]}`);
+});
+
+// ---- Laser pointer ----------------------------------------------------------
+const pointHand = (o = {}) => makeHand({ index: 1, thumb: 'tuck', ...o });
+
+test('pointer maps the camera view to the screen, mirrored, and stays on screen', () => {
+  const mid = toScreen({ x: 0.5, y: 0.55 }, 1.6);
+  assert.ok(Math.abs(mid.x - 0.5) < 1e-9 && Math.abs(mid.y - 0.5) < 1e-9);
+  assert.ok(toScreen({ x: 0.3, y: 0.55 }, 1.6).x > 0.5); // hand toward the camera's left edge = user's right
+  assert.ok(toScreen({ x: 0.5, y: 0.3 }, 1.6).y < 0.5);  // hand higher = dot higher
+  const far = toScreen({ x: -2, y: 5 }, 3);
+  assert.ok(far.x >= 0 && far.x <= 1 && far.y >= 0 && far.y <= 1);
+});
+
+test('pointer appears while pointing (when gestures are ON) and not before', () => {
+  const { pointer, c } = setup();
+  for (let i = 0; i < 5; i++) c.update(pointHand(), i * 33); // still OFF
+  assert.equal(pointer.filter(Boolean).length, 0);
+  let t = turnOn(c);
+  for (let i = 0; i < 5; i++, t += 33) c.update(pointHand(), t);
+  assert.ok(pointer.filter(Boolean).length === 5);
+});
+
+test('moving the hand moves the dot the right way', () => {
+  const { pointer, c } = setup();
+  let t = turnOn(c);
+  for (let i = 0; i < 25; i++, t += 33) c.update(pointHand({ x: 0.5, y: 0 }), t);
+  const start = pointer.filter(Boolean).at(-1);
+  for (let i = 0; i < 25; i++, t += 33) c.update(pointHand({ x: 0.35, y: -0.15 }), t); // user's right + up
+  const end = pointer.filter(Boolean).at(-1);
+  assert.ok(end.x > start.x + 0.1, `x ${start.x} -> ${end.x}`);
+  assert.ok(end.y < start.y - 0.1, `y ${start.y} -> ${end.y}`);
+});
+
+test('the dot hides after a short grace period, but not on a one-frame flicker', () => {
+  const { pointer, c } = setup();
+  let t = turnOn(c);
+  for (let i = 0; i < 5; i++, t += 33) c.update(pointHand(), t);
+  c.update(open(), t); t += 33;                 // one stray frame
+  c.update(pointHand(), t); t += 33;
+  assert.equal(pointer.filter((p) => p === null).length, 0, 'flicker must not hide the dot');
+  for (let i = 0; i < 12; i++, t += 33) c.update(makeHand({}), t); // fist for ~400 ms
+  assert.equal(pointer.at(-1), null);
+});
+
+test('pointer is off when switched off, or when index-finger page swipe uses the same pose', () => {
+  for (const o of [{ pointer: 'off' }, { page: 'point-swipe' }]) {
+    const { pointer, c } = setup(o);
+    let t = turnOn(c);
+    for (let i = 0; i < 6; i++, t += 33) c.update(pointHand(), t);
+    assert.equal(pointer.filter(Boolean).length, 0, JSON.stringify(o));
+  }
+});
+
+test('an L-shaped point counts as pointing, unless L-shape is the zoom gesture', () => {
+  const l = () => makeHand({ index: 1, thumb: 'out' });
+  let r = setup(); // default zoom = pinch
+  let t = turnOn(r.c);
+  for (let i = 0; i < 4; i++, t += 33) r.c.update(l(), t);
+  assert.ok(r.pointer.filter(Boolean).length > 0);
+  r = setup({ zoom: 'l-spread' });
+  t = turnOn(r.c);
+  for (let i = 0; i < 4; i++, t += 33) r.c.update(l(), t);
+  assert.equal(r.pointer.filter(Boolean).length, 0);
+});
+
+test('the dot is steady when the fingertip trembles', () => {
+  const { pointer, c } = setup();
+  let t = turnOn(c);
+  let s = 99; const rnd = () => ((s = (s * 1664525 + 1013904223) % 4294967296) / 4294967296) - 0.5;
+  for (let i = 0; i < 120; i++, t += 33) c.update(pointHand({ x: 0.5 + rnd() * 0.01, y: rnd() * 0.01 }), t);
+  const xs = pointer.filter(Boolean).slice(30).map((p) => p.x);
+  const mean = xs.reduce((a, b) => a + b, 0) / xs.length;
+  const sd = Math.sqrt(xs.reduce((a, b) => a + (b - mean) ** 2, 0) / xs.length);
+  assert.ok(sd < 0.01, `dot x std = ${sd}`);
 });
