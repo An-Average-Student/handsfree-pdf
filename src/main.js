@@ -209,16 +209,26 @@ window.addEventListener('resize', () => {
 viewer.addEventListener('scroll', updateLabels);
 
 window.addEventListener('keydown', (e) => {
-  if (document.getElementById('settings').open) return; // don't act while the panel is open
-  if (e.key === 'f' || e.key === 'F') togglePresenting();
-  else if (e.key === 'c' || e.key === 'C') document.getElementById('camera-toggle').click();
+  // Leave browser shortcuts alone (Ctrl/Cmd+F find, Ctrl+C copy, Ctrl +/- browser zoom...).
+  if (e.ctrlKey || e.metaKey || e.altKey) return;
+  // Don't hijack keys while typing in, or arrowing through, a form control.
+  if (e.target instanceof HTMLElement && e.target.matches('input, select, textarea, [contenteditable]')) return;
+  if (document.getElementById('settings').open) return; // ...or while the panel is open
+
+  let handled = true;
+  if (e.key === 'f' || e.key === 'F') { if (!e.repeat) togglePresenting(); }
+  else if (e.key === 'c' || e.key === 'C') { if (!e.repeat) document.getElementById('camera-toggle').click(); }
   else if (e.key === 'Escape' && isPresenting()) leavePresenting(); // fallback when fullscreen isn't available
   else if (e.key === 'ArrowRight' || e.key === 'PageDown') actions.nextPage();
   else if (e.key === 'ArrowLeft' || e.key === 'PageUp') actions.prevPage();
   else if (e.key === 'ArrowDown') actions.scrollBy(120);
   else if (e.key === 'ArrowUp') actions.scrollBy(-120);
+  else if (e.key === 'Home') goToPage(1);
+  else if (e.key === 'End') goToPage(pageCount());
   else if (e.key === '+' || e.key === '=') actions.zoomBy(1.2);
   else if (e.key === '-') actions.zoomBy(1 / 1.2);
+  else handled = false;
+  if (handled) e.preventDefault();
 });
 
 // Drag and drop
