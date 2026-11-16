@@ -55,6 +55,12 @@ Open the printed URL, then drop a PDF onto the page.
 
 **Laser pointer:** with gestures ON, point with your index finger (thumb tucked in) and a red dot follows your fingertip. It hides about 0.2 s after you stop pointing. Only the middle of the camera view is used, so you don't have to stretch your arm to reach the screen edges; **Pointer speed** in ⚙ Gestures adjusts that. The dot is smoothed with a [One Euro filter](https://gery.casiez.net/1euro/) so it doesn't shake. Pointing is also the pose for the optional index-finger page swipe, so pick one of the two.
 
+**My gestures (custom poses):** open **⚙ Gestures → My gestures → Add a gesture**, name it, choose what it does (next / previous / first / last page, presentation mode, or gestures on/off) and press **Record**. The panel closes, a 3-2-1 countdown runs, and you hold your pose still for 2 seconds. Hold it again later for about half a second to trigger it. A few safeguards keep it reliable:
+- It ignores where your hand is, how big it looks and how it's tilted. Only the *shape* matters.
+- Poses that look like a built-in gesture (open palm, fist, peace sign...) are refused, as are shaky recordings and poses too similar to ones you've saved. Try three fingers up, or index + pinky.
+- A pose fires once per hold; let go before using it again. Only "gestures on/off" works while gestures are off.
+- Up to 8 gestures, stored only in your browser. (The presentation action can't enter fullscreen without a click; it hides the toolbar.)
+
 ✊ A fist is always the "rest" pose: nothing happens. The small bar under the camera
 preview shows what the app currently sees, which helps when a gesture isn't picked up.
 

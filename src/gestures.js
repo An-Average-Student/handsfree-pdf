@@ -8,6 +8,7 @@
 
 import { DEFAULT_SETTINGS } from './settings.js';
 import { OneEuroFilter, POINTER_FILTER } from './filters.js';
+import { featureVector, matchGesture, CUSTOM_LIMITS } from './custom-gestures.js';
 
 const dist = (a, b) => Math.hypot(a.x - b.x, a.y - b.y);
 
@@ -106,7 +107,7 @@ export function classify(h) {
  * getSettings(): current choices (see settings.js); read every frame so changes apply instantly.
  * onState({ active, gesture, holdProgress }) is called every frame for the on-screen HUD.
  */
-export function createController({ actions, getSettings = () => DEFAULT_SETTINGS, onState = () => {}, onPointer = () => {} }) {
+export function createController({ actions, getSettings = () => DEFAULT_SETTINGS, getCustom = () => [], onState = () => {}, onPointer = () => {} }) {
   let active = false;
   let holdStart = null;
   let toggledThisHold = false;
@@ -124,6 +125,19 @@ export function createController({ actions, getSettings = () => DEFAULT_SETTINGS
   const fy = new OneEuroFilter(POINTER_FILTER);
   let pointerShown = false;
   let lastPointAt = 0;
+  // Custom (user-recorded) gestures: a pose must be held, fires once, then needs a release.
+  let customName = null;
+  let candId = null;
+  let candSince = 0;
+  let candFired = false;
+  let lastCustomFire = -Infinity;
+
+  function runCustom(action) {
+    if (action === 'toggle') { active = !active; return; } // the only one that works while OFF
+    if (!active) return;
+    const run = { next: actions.nextPage, prev: actions.prevPage, first: actions.firstPage, last: actions.lastPage, present: actions.togglePresent }[action];
+    run?.();
+  }
 
   // Hide the dot once pointing has stopped for a moment (not on a one-frame flicker).
   function hidePointer(t) {
@@ -135,7 +149,7 @@ export function createController({ actions, getSettings = () => DEFAULT_SETTINGS
   }
 
   function emit(gesture, holdProgress = 0) {
-    onState({ active, gesture, holdProgress });
+    onState({ active, gesture, holdProgress, custom: customName });
   }
 
   function update(hand, t = performance.now()) {
@@ -146,6 +160,7 @@ export function createController({ actions, getSettings = () => DEFAULT_SETTINGS
       holdStart = null; toggledThisHold = false; pos = null; prevGesture = null;
       history = []; anchorY = null; lastGap = null; pendingZoom = [];
       hidePointer(t);
+      candId = null; candFired = false; customName = null;
       emit('none');
       return;
     }
@@ -173,6 +188,27 @@ export function createController({ actions, getSettings = () => DEFAULT_SETTINGS
     } else {
       holdStart = null;
       toggledThisHold = false;
+    }
+
+    // Custom gestures: match the live pose against the user's recordings.
+    const saved = getCustom();
+    customName = null;
+    if (saved.length) {
+      const hit = matchGesture(featureVector(hand), saved);
+      customName = hit?.name ?? null;
+      if (hit && hit.id === candId) {
+        if (!candFired && t - candSince >= CUSTOM_LIMITS.holdMs && t - lastCustomFire >= CUSTOM_LIMITS.cooldownMs) {
+          candFired = true;
+          lastCustomFire = t;
+          runCustom(hit.action);
+        }
+      } else {
+        candId = hit?.id ?? null; // a new pose (or none): start timing again
+        candSince = t;
+        candFired = false;
+      }
+    } else {
+      candId = null;
     }
 
     // Laser pointer: a red dot on the fingertip while pointing. (Pointing with the index

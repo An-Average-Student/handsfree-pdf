@@ -1,11 +1,12 @@
 import { OPTIONS, DEFAULT_SETTINGS } from './settings.js';
+import { CUSTOM_ACTIONS, CUSTOM_LIMITS } from './custom-gestures.js';
 
 /**
  * Builds the ⚙ Gestures panel from the OPTIONS list.
  * `settings` is a plain object that we edit in place; the gesture controller reads
  * the same object every frame, so changes apply instantly.
  */
-export function initSettingsUI({ settings, onChange }) {
+export function initSettingsUI({ settings, onChange, custom }) {
   const dialog = document.getElementById('settings');
   const body = document.getElementById('settings-body');
 
@@ -44,6 +45,9 @@ export function initSettingsUI({ settings, onChange }) {
       }
       body.append(group);
     }
+
+    // My gestures (user-recorded poses)
+    if (custom) body.append(customSection());
 
     // Sliders
     const slider = (title, key, min, max, note) => {
@@ -101,11 +105,107 @@ export function initSettingsUI({ settings, onChange }) {
     body.append(sheet);
   }
 
-  document.getElementById('settings-open').onclick = () => { render(); dialog.showModal(); };
+  // "My gestures": list, add (name + action + record) and remove. All text is set with textContent.
+  function customSection() {
+    const box = document.createElement('fieldset');
+    box.id = 'custom-section';
+    const lg = document.createElement('legend');
+    lg.textContent = 'My gestures';
+    box.append(lg);
+
+    const intro = document.createElement('small');
+    intro.textContent = 'Record your own hand pose and choose what it does. It triggers when you hold it for about half a second.';
+    box.append(intro);
+
+    const saved = custom.list();
+    for (const g of saved) {
+      const row = document.createElement('div');
+      row.className = 'custom-row';
+      const name = document.createElement('span');
+      name.className = 'custom-name';
+      name.textContent = `\u2B50 ${g.name}`;
+      const act = document.createElement('small');
+      act.textContent = CUSTOM_ACTIONS.find((a) => a.id === g.action)?.label ?? g.action;
+      const del = document.createElement('button');
+      del.className = 'btn';
+      del.textContent = 'Remove';
+      del.setAttribute('aria-label', `Remove ${g.name}`);
+      del.onclick = () => { custom.remove(g.id); render(); };
+      row.append(name, act, del);
+      box.append(row);
+    }
+
+    if (saved.length >= CUSTOM_LIMITS.maxGestures) {
+      const full = document.createElement('small');
+      full.textContent = `You can save up to ${CUSTOM_LIMITS.maxGestures} gestures.`;
+      box.append(full);
+      return box;
+    }
+
+    const add = document.createElement('button');
+    add.className = 'btn add-gesture';
+    add.textContent = '+ Add a gesture';
+    const form = document.createElement('div');
+    form.className = 'custom-form';
+    form.hidden = true;
+
+    const nameLabel = document.createElement('label');
+    nameLabel.textContent = 'Name';
+    const nameInput = document.createElement('input');
+    nameInput.type = 'text';
+    nameInput.maxLength = CUSTOM_LIMITS.nameMax;
+    nameInput.placeholder = `My gesture ${saved.length + 1}`;
+    nameLabel.append(nameInput);
+
+    const actLabel = document.createElement('label');
+    actLabel.textContent = 'What it does';
+    const actSelect = document.createElement('select');
+    for (const a of CUSTOM_ACTIONS) {
+      const o = document.createElement('option');
+      o.value = a.id;
+      o.textContent = a.label;
+      actSelect.append(o);
+    }
+    actLabel.append(actSelect);
+
+    const hint = document.createElement('small');
+    hint.textContent = custom.cameraOn()
+      ? 'Press Record, then hold your pose still when asked. Avoid poses the app already uses (open palm, fist, peace sign...).'
+      : '\u26A0 Start the camera first (the Camera button), then come back here.';
+    if (!custom.cameraOn()) hint.className = 'warn';
+
+    const go = document.createElement('button');
+    go.className = 'btn primary';
+    go.textContent = 'Record';
+    go.disabled = !custom.cameraOn();
+    go.onclick = async () => {
+      go.disabled = true;
+      const name = nameInput.value.trim() || nameInput.placeholder;
+      await custom.record({ name, action: actSelect.value });
+      render();
+    };
+    const cancel = document.createElement('button');
+    cancel.className = 'btn';
+    cancel.textContent = 'Cancel';
+    cancel.onclick = () => { form.hidden = true; add.hidden = false; };
+
+    const buttons = document.createElement('div');
+    buttons.className = 'custom-buttons';
+    buttons.append(go, cancel);
+    form.append(nameLabel, actLabel, hint, buttons);
+    add.onclick = () => { form.hidden = false; add.hidden = true; nameInput.focus(); };
+    box.append(add, form);
+    return box;
+  }
+
+  const open = () => { render(); dialog.showModal(); };
+  document.getElementById('settings-open').onclick = open;
   document.getElementById('settings-close').onclick = () => dialog.close();
   document.getElementById('settings-reset').onclick = () => {
     Object.assign(settings, DEFAULT_SETTINGS);
     onChange();
     render();
   };
+
+  return { open, render };
 }

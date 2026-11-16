@@ -280,12 +280,32 @@ document.addEventListener('fullscreenchange', () => { if (!document.fullscreenEl
 
 // ---- Camera + hand tracking ------------------------------------------------
 import { startHandTracking, listCameras, friendlyCameraError } from './hands.js';
-import { createController } from './gestures.js';
+import { createController, classify } from './gestures.js';
+import { loadCustom, saveCustom, buildTemplate, CUSTOM_LIMITS, BUILTIN_NAMES } from './custom-gestures.js';
 import { loadSettings, saveSettings } from './settings.js';
 import { initSettingsUI } from './settings-ui.js';
 
 const settings = loadSettings();
-initSettingsUI({ settings, onChange: () => saveSettings(settings) });
+let customGestures = loadCustom();
+let frameSink = null;   // while recording, receives every camera frame's hand
+let recording = false;  // pauses normal gesture control while a pose is being recorded
+const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
+
+// One camera frame's hand (or null). While recording, normal control pauses and frames go to the recorder.
+function handleFrame(hand) {
+  if (!recording) controller.update(hand);
+  frameSink?.(hand);
+}
+// Test hook for automated browser tests. Only exists in development builds (removed from the live site).
+if (import.meta.env.DEV) window.__hf = { handleFrame };
+
+const customApi = {
+  list: () => customGestures,
+  cameraOn: () => Boolean(stopTracking),
+  remove: (id) => { customGestures = customGestures.filter((g) => g.id !== id); saveCustom(customGestures); },
+  record: (opts) => recordCustom(opts),
+};
+const settingsUi = initSettingsUI({ settings, onChange: () => saveSettings(settings), custom: customApi });
 
 const camBtn = document.getElementById('camera-toggle');
 const camStatus = document.getElementById('camera-status');
@@ -324,6 +344,10 @@ export const feedbackActions = {
     actions.zoomBy(factor);
     say(`🔍 Zoom ${Math.round(zoom * 100)}%`, 900);
   },
+  // used by custom gestures
+  firstPage: () => { if (pageCount()) { say('⏮ First page'); goToPage(1); } },
+  lastPage: () => { if (pageCount()) { say(`⏭ Last page (${pageCount()})`); goToPage(pageCount()); } },
+  togglePresent: () => togglePresenting(),
 };
 
 let wasActive = false;
@@ -337,16 +361,17 @@ function movePointer(p) {
 
 export const controller = createController({
   actions: feedbackActions,
+  getCustom: () => customGestures,
   onPointer: movePointer,
   getSettings: () => settings,
-  onState: ({ active, gesture, holdProgress }) => {
+  onState: ({ active, gesture, holdProgress, custom }) => {
     if (active !== wasActive) {
       wasActive = active;
       say(active ? '✋ Gestures ON' : '✊ Gestures OFF', 1400);
     }
     const state = active ? 'ON' : 'OFF';
     const hold = holdProgress > 0 && holdProgress < 1 ? ` · hold ${Math.round(holdProgress * 100)}%` : '';
-    hud.textContent = `${state} · ${LABELS[gesture]}${hold}`;
+    hud.textContent = `${state} · ${custom ? `⭐ ${custom}` : LABELS[gesture]}${hold}`;
     hud.className = active ? 'on' : '';
   },
 });
@@ -390,7 +415,7 @@ async function startCamera() {
         camStatus.textContent = s;
         if (s === 'Camera on') setTimeout(() => { if (camStatus.textContent === 'Camera on') camStatus.textContent = ''; }, 1500);
       },
-      onFrame: (hand) => controller.update(hand),
+      onFrame: handleFrame,
     });
     stopTracking = tracking.stop;
     settings.cameraId = tracking.deviceId; // remember which camera worked
@@ -462,3 +487,41 @@ window.addEventListener('keydown', (e) => {
     fileInput.click();
   }
 });
+
+// ---- Recording a custom gesture -----------------------------------------------
+async function recordCustom({ name, action }) {
+  if (!stopTracking) return { ok: false, message: 'Start the camera first.' };
+  if (customGestures.length >= CUSTOM_LIMITS.maxGestures) {
+    return { ok: false, message: `You can save up to ${CUSTOM_LIMITS.maxGestures} gestures.` };
+  }
+  const cleanName = String(name ?? '').trim().slice(0, CUSTOM_LIMITS.nameMax) || `My gesture ${customGestures.length + 1}`;
+  const wasMini = camBox.classList.contains('mini');
+  recording = true;
+  document.getElementById('settings').close(); // so the camera picture is visible while recording
+  if (wasMini) setPreviewMini(false);
+  let result;
+  try {
+    for (let n = 3; n >= 1; n--) { showToast(`Get ready\u2026 ${n}`, 1100); await sleep(1000); }
+    showToast('Hold your pose \u270B', 2400);
+    const hands = await new Promise((resolve) => {
+      const got = [];
+      frameSink = (h) => got.push(h);
+      setTimeout(() => { frameSink = null; resolve(got); }, 2000);
+    });
+    result = buildTemplate(hands, classify, customGestures, BUILTIN_NAMES);
+    if (result.ok) {
+      const id = globalThis.crypto?.randomUUID?.() ?? `g${Date.now()}${Math.random().toString(36).slice(2, 8)}`;
+      customGestures = [...customGestures, { id, name: cleanName, action, samples: result.samples }];
+      saveCustom(customGestures);
+      showToast(`Saved \u201C${cleanName}\u201D \u2713`, 2600);
+    } else {
+      showToast(result.message, 6500);
+    }
+  } finally {
+    frameSink = null;
+    recording = false;
+    if (wasMini) setPreviewMini(true);
+    settingsUi.open(); // back to the panel to see the result
+  }
+  return result;
+}
